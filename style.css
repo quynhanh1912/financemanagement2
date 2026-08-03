@@ -28,15 +28,15 @@ body::before {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: url('bg_sage.svg') center/cover no-repeat;
-    filter: blur(5px) saturate(1.05); /* Soft, bright pastel forest background */
+    /* Removed heavy CSS blur for iOS performance */
     z-index: -2;
-    transform: scale(1.1); /* Prevent blurred edges from leaking */
 }
 
 body {
     background-color: #DCF0E2; /* Fallback */
     color: var(--text-main);
     min-height: 100vh;
+    min-height: 100dvh; /* Fix bottom bar jump on iOS Safari */
     display: flex;
     justify-content: center;
     overflow-x: hidden;
@@ -51,10 +51,17 @@ body {
 /* Background animated blobs */
 .bg-shape {
     position: absolute;
-    filter: blur(80px);
+    filter: blur(40px); /* Reduced blur for performance */
     z-index: -1;
     border-radius: 50%;
     animation: float 10s infinite ease-in-out alternate;
+}
+
+/* Tắt animation trên mobile để chống lag */
+@media (max-width: 768px) {
+    .bg-shape {
+        animation: none;
+    }
 }
 
 .bg-shape-1 {
