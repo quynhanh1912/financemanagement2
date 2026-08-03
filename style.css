@@ -35,8 +35,8 @@ body::before {
 html, body {
     overflow-x: hidden;
     width: 100%;
-    /* Chống nảy trang trên iOS */
-    overscroll-behavior-y: none;
+    /* Added auto to ensure vertical scroll works */
+    overflow-y: auto;
 }
 
 body {
