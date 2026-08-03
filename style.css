@@ -32,6 +32,13 @@ body::before {
     z-index: -2;
 }
 
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    /* Chống nảy trang trên iOS */
+    overscroll-behavior-y: none;
+}
+
 body {
     background-color: #DCF0E2; /* Fallback */
     color: var(--text-main);
@@ -39,7 +46,6 @@ body {
     min-height: 100dvh; /* Fix bottom bar jump on iOS Safari */
     display: flex;
     justify-content: center;
-    overflow-x: hidden;
     position: relative;
     padding: 20px;
     
