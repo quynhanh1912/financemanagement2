@@ -86,6 +86,8 @@ const categories = {
 // State
 let transactions = [];
 let scheduledBills = [];
+let iceLogs = [];      // { id, date, qty }
+let icePayments = [];  // { id, date, qty, amount }
 
 const INITIAL_CAPITAL = 2777000;
 const STAFF_SALARY_PER_DAY = 300000;
@@ -121,9 +123,16 @@ async function init() {
     attachMoneyFormat('expenseAmount');
     attachMoneyFormat('incomeAmount');
     attachMoneyFormat('billAmount');
+    attachMoneyFormat('icePayAmount');
+
+    // Set today for ice date input
+    const todayStr = new Date().toISOString().split('T')[0];
+    const iceDateEl = document.getElementById('iceDate');
+    if (iceDateEl) iceDateEl.value = todayStr;
 
     setupTabs();
     setupFormEvents();
+    setupIceEvents();
     setupCloudModal();
     
     // Automatically load data on open
@@ -196,7 +205,14 @@ async function fetchCloudData() {
         if (data.scheduledBills && Array.isArray(data.scheduledBills)) {
             scheduledBills = data.scheduledBills;
         }
+        if (data.iceLogs && Array.isArray(data.iceLogs)) {
+            iceLogs = data.iceLogs;
+        }
+        if (data.icePayments && Array.isArray(data.icePayments)) {
+            icePayments = data.icePayments;
+        }
         updateUI();
+        renderIceUI();
     } catch (e) {
         console.error(e);
         alert('Lỗi tải dữ liệu. Vui lòng kiểm tra lại mạng hoặc URL Google Sheets!');
@@ -218,7 +234,9 @@ async function saveCloudData(successMsg) {
             method: 'POST',
             body: JSON.stringify({
                 transactions: transactions,
-                scheduledBills: scheduledBills
+                scheduledBills: scheduledBills,
+                iceLogs: iceLogs,
+                icePayments: icePayments
             })
         });
         const data = await res.json();
@@ -1153,6 +1171,216 @@ function renderPersonalChart(cost) {
         label.innerHTML = `Còn lại<br><span style="color:var(--text-main)">${formatMoney(limit - cost)}</span>`;
         label.className = 'chart-label';
     }
+}
+
+// ---------------- ICE TRACKING ----------------
+function setupIceEvents() {
+    // Add ice log
+    document.getElementById('addIceBtn').addEventListener('click', async () => {
+        const dateVal = document.getElementById('iceDate').value;
+        const qtyVal = parseInt(document.getElementById('iceQty').value);
+        if (!dateVal || !qtyVal || qtyVal < 1) {
+            alert('Vui lòng nhập ngày và số bao đá hợp lệ.');
+            return;
+        }
+        const entry = { id: Date.now(), date: dateVal, qty: qtyVal };
+        iceLogs.push(entry);
+        iceLogs.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+        const success = await saveCloudData('Đã thêm bao đá!');
+        if (success) {
+            document.getElementById('iceQty').value = '';
+            renderIceUI();
+        } else {
+            iceLogs = iceLogs.filter(l => l.id !== entry.id);
+        }
+    });
+
+    // Delete ice log
+    document.getElementById('iceLogList').addEventListener('click', async (e) => {
+        const btn = e.target.closest('.ice-delete-btn');
+        if (!btn) return;
+        const id = parseInt(btn.dataset.id);
+        if (!confirm('Xoá mục đá này?')) return;
+        const backup = [...iceLogs];
+        iceLogs = iceLogs.filter(l => l.id !== id);
+        const success = await saveCloudData('Đã xoá mục đá');
+        if (success) {
+            renderIceUI();
+        } else {
+            iceLogs = backup;
+        }
+    });
+
+    // Query ice
+    document.getElementById('iceQueryBtn').addEventListener('click', () => {
+        const fromVal = document.getElementById('iceQueryFrom').value;
+        const toVal = document.getElementById('iceQueryTo').value;
+        const resultEl = document.getElementById('iceQueryResult');
+
+        if (!fromVal || !toVal) {
+            resultEl.classList.remove('hidden');
+            resultEl.innerHTML = '<p style="color: var(--warning); font-size: 0.9rem;">⚠️ Vui lòng chọn đầy đủ khoảng ngày.</p>';
+            return;
+        }
+
+        const from = new Date(fromVal);
+        const to = new Date(toVal);
+        to.setHours(23, 59, 59);
+
+        const filtered = iceLogs.filter(l => {
+            const d = new Date(l.date);
+            return d >= from && d <= to;
+        });
+
+        const totalQty = filtered.reduce((sum, l) => sum + l.qty, 0);
+        const totalDays = filtered.length;
+        const fromStr = from.toLocaleDateString('vi-VN');
+        const toStr = to.toLocaleDateString('vi-VN');
+
+        // Build daily breakdown
+        let dailyMap = {};
+        filtered.forEach(l => {
+            dailyMap[l.date] = (dailyMap[l.date] || 0) + l.qty;
+        });
+        const dailyEntries = Object.entries(dailyMap).sort((a, b) => new Date(b[0]) - new Date(a[0]));
+        let dailyHTML = dailyEntries.map(([d, q]) =>
+            `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:0.85rem;"><span>${new Date(d).toLocaleDateString('vi-VN')}</span><strong style="color:#3b82f6">${q} bao</strong></div>`
+        ).join('');
+
+        resultEl.classList.remove('hidden');
+        resultEl.innerHTML = `
+            <div class="ice-query-result">
+                <span class="iqr-label">📅 ${fromStr} → ${toStr}</span>
+                <span class="iqr-value">🧊 ${totalQty} bao đá</span>
+                <span class="iqr-detail">${Object.keys(dailyMap).length} ngày có ghi nhận • ${totalDays} lần nhập</span>
+                ${dailyHTML ? '<div style="margin-top:8px; border-top:1px solid rgba(96,165,250,0.15); padding-top:8px;">' + dailyHTML + '</div>' : ''}
+            </div>
+        `;
+    });
+
+    // Pay ice
+    document.getElementById('icePayBtn').addEventListener('click', async () => {
+        const qtyVal = parseInt(document.getElementById('icePayQty').value);
+        const amountVal = parseAmount(document.getElementById('icePayAmount').value);
+        if (!qtyVal || qtyVal < 1 || !amountVal) {
+            alert('Vui lòng nhập số bao và số tiền thanh toán.');
+            return;
+        }
+        const payment = {
+            id: Date.now(),
+            date: new Date().toISOString().split('T')[0],
+            qty: qtyVal,
+            amount: amountVal
+        };
+        icePayments.push(payment);
+        
+        // Also add as a shop expense (chi phí quán)
+        const tx = {
+            id: Date.now() + 1,
+            type: 'expense',
+            date: payment.date,
+            amount: amountVal,
+            name: `Thanh toán đá (${qtyVal} bao)`,
+            group: 'quan',
+            category: 'Chi phí chung',
+            subCategory: '',
+            note: `Thanh toán ${qtyVal} bao đá`,
+            paymentMethod: 'cash',
+            isCardPayment: false
+        };
+        transactions.push(tx);
+        transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+
+        const success = await saveCloudData('Đã thanh toán đá!');
+        if (success) {
+            document.getElementById('icePayQty').value = '';
+            document.getElementById('icePayAmount').value = '';
+            renderIceUI();
+        } else {
+            icePayments = icePayments.filter(p => p.id !== payment.id);
+            transactions = transactions.filter(t => t.id !== tx.id);
+        }
+    });
+
+    // Delete ice payment
+    document.getElementById('icePaymentList').addEventListener('click', async (e) => {
+        const btn = e.target.closest('.ice-delete-btn');
+        if (!btn) return;
+        const id = parseInt(btn.dataset.id);
+        if (!confirm('Xoá lần thanh toán đá này?')) return;
+        const backup = [...icePayments];
+        icePayments = icePayments.filter(p => p.id !== id);
+        const success = await saveCloudData('Đã xoá thanh toán đá');
+        if (success) {
+            renderIceUI();
+        } else {
+            icePayments = backup;
+        }
+    });
+}
+
+function renderIceUI() {
+    renderIceLogs();
+    renderIcePayments();
+    renderIceUnpaidBanner();
+}
+
+function renderIceLogs() {
+    const listEl = document.getElementById('iceLogList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const recent = iceLogs.slice(0, 15);
+    if (recent.length === 0) {
+        listEl.innerHTML = '<p style="color: #94a3b8; text-align: center; font-size: 0.85rem;">Chưa có dữ liệu đá.</p>';
+        return;
+    }
+
+    recent.forEach(log => {
+        const div = document.createElement('div');
+        div.className = 'ice-log-item';
+        div.innerHTML = `
+            <span class="ice-date">${new Date(log.date).toLocaleDateString('vi-VN')}</span>
+            <span class="ice-qty">${log.qty} bao</span>
+            <button class="ice-delete-btn" data-id="${log.id}" title="Xoá"><i class="fas fa-trash"></i></button>
+        `;
+        listEl.appendChild(div);
+    });
+}
+
+function renderIcePayments() {
+    const listEl = document.getElementById('icePaymentList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    if (icePayments.length === 0) {
+        listEl.innerHTML = '<p style="color: #94a3b8; text-align: center; font-size: 0.85rem;">Chưa thanh toán lần nào.</p>';
+        return;
+    }
+
+    // Show most recent first
+    const sorted = [...icePayments].sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+    sorted.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'ice-payment-item';
+        div.innerHTML = `
+            <div class="ip-info">
+                <span class="ip-amount">${formatMoney(p.amount)}</span>
+                <span class="ip-meta">${new Date(p.date).toLocaleDateString('vi-VN')} • ${p.qty} bao</span>
+            </div>
+            <button class="ice-delete-btn" data-id="${p.id}" title="Xoá"><i class="fas fa-trash"></i></button>
+        `;
+        listEl.appendChild(div);
+    });
+}
+
+function renderIceUnpaidBanner() {
+    const el = document.getElementById('iceUnpaidTotal');
+    if (!el) return;
+    const totalLogged = iceLogs.reduce((sum, l) => sum + l.qty, 0);
+    const totalPaid = icePayments.reduce((sum, p) => sum + p.qty, 0);
+    const unpaid = Math.max(0, totalLogged - totalPaid);
+    el.textContent = `${unpaid} bao`;
 }
 
 // Start
