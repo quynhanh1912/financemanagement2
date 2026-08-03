@@ -84,19 +84,8 @@ const categories = {
 };
 
 // State
-let transactions = JSON.parse(localStorage.getItem('finance_transactions')) || [];
-
-// Migrate old company salary to scheduled bills
-let oldCompanySalary = JSON.parse(localStorage.getItem('finance_company_salary'));
-let scheduledBills = JSON.parse(localStorage.getItem('finance_scheduled_bills'));
-
-if (!scheduledBills) {
-    scheduledBills = [];
-    if (oldCompanySalary && oldCompanySalary > 0) {
-        scheduledBills.push({ id: Date.now(), name: 'Lương công ty', day: 5, amount: oldCompanySalary });
-        localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
-    }
-}
+let transactions = [];
+let scheduledBills = [];
 
 const INITIAL_CAPITAL = 2777000;
 const STAFF_SALARY_PER_DAY = 300000;
@@ -125,101 +114,128 @@ const billForm = document.getElementById('billForm');
 const billList = document.getElementById('billList');
 
 // Initialize
-function init() {
-    // Set today's date as default
+async function init() {
     updateDateInputs();
-
-    // Auto-update date inputs every minute (handles midnight rollover)
     setInterval(updateDateInputs, 60000);
 
-    // Attach money formatters
     attachMoneyFormat('expenseAmount');
     attachMoneyFormat('incomeAmount');
     attachMoneyFormat('billAmount');
 
-    // Event Listeners
     setupTabs();
     setupFormEvents();
-    setupCloudSync();
-    updateUI();
+    setupCloudModal();
+    
+    // Automatically load data on open
+    await fetchCloudData();
+}
+// ---------------- CLOUD SYNC LOGIC ----------------
+function showGlobalLoader(text) {
+    const el = document.getElementById('globalLoader');
+    if(el) {
+        document.getElementById('loadingText').textContent = text || 'Đang xử lý...';
+        el.classList.remove('hidden');
+        el.style.display = 'flex';
+    }
 }
 
-// ---------------- CLOUD SYNC LOGIC ----------------
-function setupCloudSync() {
+function hideGlobalLoader() {
+    const el = document.getElementById('globalLoader');
+    if(el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+    }
+}
+
+function setupCloudModal() {
     const cloudBtn = document.getElementById('cloudBtn');
     const cloudModal = document.getElementById('cloudModal');
     const closeBtn = cloudModal.querySelector('.close-modal');
     const saveBtn = document.getElementById('saveCloudUrlBtn');
     const syncBtn = document.getElementById('syncNowBtn');
     const urlInput = document.getElementById('cloudApiUrl');
-    const msg = document.getElementById('cloudStatusMsg');
 
-    // Load saved URL
     const savedUrl = localStorage.getItem('finance_cloud_url');
     if (savedUrl) urlInput.value = savedUrl;
 
-    cloudBtn.onclick = () => {
-        cloudModal.classList.remove('hidden');
-        msg.style.display = 'none';
-    };
+    if(cloudBtn) {
+        cloudBtn.onclick = () => {
+            cloudModal.classList.remove('hidden');
+        };
+    }
 
-    closeBtn.onclick = () => cloudModal.classList.add('hidden');
+    if(closeBtn) {
+        closeBtn.onclick = () => cloudModal.classList.add('hidden');
+    }
 
-    saveBtn.onclick = () => {
-        localStorage.setItem('finance_cloud_url', urlInput.value.trim());
-        msg.style.display = 'block';
-        msg.style.color = '#10b981';
-        msg.textContent = 'Đã lưu URL thành công!';
-        setTimeout(() => msg.style.display = 'none', 3000);
-    };
-
-    syncBtn.onclick = async () => {
-        const url = urlInput.value.trim();
-        if (!url) return alert('Vui lòng nhập URL!');
-        
-        syncBtn.textContent = 'Đang tải...';
-        syncBtn.disabled = true;
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-            if (data.transactions && Array.isArray(data.transactions)) {
-                transactions = data.transactions;
-                localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-            }
-            if (data.scheduledBills && Array.isArray(data.scheduledBills)) {
-                scheduledBills = data.scheduledBills;
-                localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
-            }
-            updateUI();
-            msg.style.display = 'block';
-            msg.style.color = '#10b981';
-            msg.textContent = 'Tải dữ liệu thành công!';
-        } catch (e) {
-            msg.style.display = 'block';
-            msg.style.color = '#f87171';
-            msg.textContent = 'Lỗi kết nối. Vui lòng kiểm tra lại URL.';
-        } finally {
-            syncBtn.textContent = 'Tải Cloud Về Máy';
-            syncBtn.disabled = false;
-        }
-    };
-}
-
-function syncToCloudBg() {
-    const url = localStorage.getItem('finance_cloud_url');
-    if (!url) return; // No cloud configured
+    if(saveBtn) {
+        saveBtn.onclick = async () => {
+            localStorage.setItem('finance_cloud_url', urlInput.value.trim());
+            cloudModal.classList.add('hidden');
+            await fetchCloudData();
+        };
+    }
     
-    // Background POST request
-    fetch(url, {
-        method: 'POST',
-        body: JSON.stringify({
-            transactions: transactions,
-            scheduledBills: scheduledBills
-        })
-    }).catch(e => console.log('Background sync failed:', e));
+    if(syncBtn) syncBtn.style.display = 'none';
 }
 
+async function fetchCloudData() {
+    const url = localStorage.getItem('finance_cloud_url');
+    if (!url) {
+        document.getElementById('cloudModal').classList.remove('hidden');
+        return;
+    }
+    
+    showGlobalLoader('Đang tải dữ liệu từ Cloud...');
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.transactions && Array.isArray(data.transactions)) {
+            transactions = data.transactions;
+        }
+        if (data.scheduledBills && Array.isArray(data.scheduledBills)) {
+            scheduledBills = data.scheduledBills;
+        }
+        updateUI();
+    } catch (e) {
+        console.error(e);
+        alert('Lỗi tải dữ liệu. Vui lòng kiểm tra lại mạng hoặc URL Google Sheets!');
+    } finally {
+        hideGlobalLoader();
+    }
+}
 
+async function saveCloudData(successMsg) {
+    const url = localStorage.getItem('finance_cloud_url');
+    if (!url) {
+        alert('Chưa cấu hình URL Google Sheets!');
+        return false;
+    }
+    
+    showGlobalLoader('Đang lưu lên Cloud...');
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify({
+                transactions: transactions,
+                scheduledBills: scheduledBills
+            })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            if (successMsg) showToast(successMsg);
+            updateUI();
+            return true;
+        }
+        throw new Error('Save failed');
+    } catch (e) {
+        console.error(e);
+        alert('Lỗi lưu dữ liệu. Có thể do mất mạng.');
+        return false;
+    } finally {
+        hideGlobalLoader();
+    }
+}
 function updateDateInputs() {
     const today = new Date().toISOString().split('T')[0];
     const expenseDateEl = document.getElementById('expenseDate');
@@ -297,7 +313,7 @@ function setupFormEvents() {
     });
 
     // Submit Expense
-    expenseForm.addEventListener('submit', (e) => {
+    expenseForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const selectedOption = expenseCategory.options[expenseCategory.selectedIndex];
         const group = selectedOption ? selectedOption.getAttribute('data-group') : 'quan';
@@ -321,19 +337,21 @@ function setupFormEvents() {
             paymentMethod: isCardPayment ? 'cash' : document.getElementById('expensePayMethod').value,
             isCardPayment: isCardPayment
         };
-        addTransaction(tx);
-        expenseForm.reset();
-        document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
-        // Reset toggle to cash
-        document.getElementById('payBtnCash').classList.add('active');
-        document.getElementById('payBtnCard').classList.remove('active');
-        document.getElementById('expensePayMethod').value = 'cash';
-        subCategoryGroup.classList.add('hidden');
-        companySubCategoryGroup.classList.add('hidden');
+        const success = await addTransaction(tx);
+        if (success) {
+            expenseForm.reset();
+            document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+            // Reset toggle to cash
+            document.getElementById('payBtnCash').classList.add('active');
+            document.getElementById('payBtnCard').classList.remove('active');
+            document.getElementById('expensePayMethod').value = 'cash';
+            subCategoryGroup.classList.add('hidden');
+            companySubCategoryGroup.classList.add('hidden');
+        }
     });
 
     // Submit Income
-    incomeForm.addEventListener('submit', (e) => {
+    incomeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const tx = {
             id: Date.now(),
@@ -343,13 +361,15 @@ function setupFormEvents() {
             source: document.getElementById('incomeSource').value,
             note: document.getElementById('incomeNote').value
         };
-        addTransaction(tx);
-        incomeForm.reset();
-        document.getElementById('incomeDate').value = new Date().toISOString().split('T')[0];
+        const success = await addTransaction(tx);
+        if (success) {
+            incomeForm.reset();
+            document.getElementById('incomeDate').value = new Date().toISOString().split('T')[0];
+        }
     });
 
     // Add Scheduled Bill
-    billForm.addEventListener('submit', (e) => {
+    billForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const bill = {
             id: Date.now(),
@@ -358,35 +378,42 @@ function setupFormEvents() {
             amount: parseAmount(document.getElementById('billAmount').value)
         };
         scheduledBills.push(bill);
-        localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
-        syncToCloudBg();
-        showToast('Đã thêm lịch nhắc!');
-        billForm.reset();
-        updateUI();
+        const success = await saveCloudData('Đã thêm lịch nhắc!');
+        if (success) {
+            billForm.reset();
+        } else {
+            // Revert on fail
+            scheduledBills.pop();
+        }
     });
 
     // Delete Scheduled Bill
-    billList.addEventListener('click', (e) => {
+    billList.addEventListener('click', async (e) => {
         const btn = e.target.closest('.delete-bill-btn');
         if (btn) {
             const id = parseInt(btn.dataset.id);
+            const backup = [...scheduledBills];
             scheduledBills = scheduledBills.filter(b => b.id !== id);
-            localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
-            syncToCloudBg();
-            showToast('Đã xoá lịch nhắc');
-            updateUI();
+            const success = await saveCloudData('Đã xoá lịch nhắc');
+            if (!success) {
+                // Revert
+                scheduledBills = backup;
+            }
         }
     });
 
     // Reset Data
-    document.getElementById('resetBtn').addEventListener('click', () => {
+    document.getElementById('resetBtn').addEventListener('click', async () => {
         if(confirm('Bạn có chắc chắn muốn xoá toàn bộ dữ liệu? Hành động này không thể hoàn tác.')) {
+            const backupT = [...transactions];
+            const backupB = [...scheduledBills];
             transactions = [];
-            localStorage.removeItem('finance_transactions');
-            localStorage.removeItem('finance_scheduled_bills');
-            syncToCloudBg();
-            updateUI();
-            showToast('Đã xoá dữ liệu');
+            scheduledBills = [];
+            const success = await saveCloudData('Đã xoá dữ liệu');
+            if (!success) {
+                transactions = backupT;
+                scheduledBills = backupB;
+            }
         }
     });
 
@@ -394,14 +421,16 @@ function setupFormEvents() {
     document.getElementById('applyFilterBtn').addEventListener('click', applyFilter);
 }
 
-function addTransaction(tx) {
+async function addTransaction(tx) {
     transactions.push(tx);
-    // Sort by date desc
     transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
-    localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-    syncToCloudBg();
-    showToast('Đã lưu thành công!');
-    updateUI();
+    const success = await saveCloudData('Đã thêm thành công!');
+    if (!success) {
+        // Revert
+        transactions = transactions.filter(t => t.id !== tx.id);
+        return false;
+    }
+    return true;
 }
 
 function showToast(msg) {
@@ -561,17 +590,16 @@ function renderHistory() {
     });
 
     // Event delegation for edit/delete
-    transactionListEl.onclick = (e) => {
+    transactionListEl.onclick = async (e) => {
         const editBtn = e.target.closest('.tx-action-btn.edit');
         const deleteBtn = e.target.closest('.tx-action-btn.delete');
         if (editBtn) openEditModal(parseInt(editBtn.dataset.id));
         if (deleteBtn) {
             if (confirm('Xoá giao dịch này?')) {
+                const backup = [...transactions];
                 transactions = transactions.filter(t => t.id !== parseInt(deleteBtn.dataset.id));
-                localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-                syncToCloudBg();
-                showToast('Đã xoá giao dịch');
-                updateUI();
+                const success = await saveCloudData('Đã xoá giao dịch');
+                if (!success) transactions = backup;
             }
         }
     };
@@ -647,10 +675,13 @@ document.getElementById('editModal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('editModal')) closeEditModal();
 });
 
-document.getElementById('saveEditBtn').addEventListener('click', () => {
+document.getElementById('saveEditBtn').addEventListener('click', async () => {
     if (!editingId) return;
     const idx = transactions.findIndex(t => t.id === editingId);
     if (idx === -1) return;
+    
+    // Create a backup of current state
+    const backup = JSON.parse(JSON.stringify(transactions));
     const tx = transactions[idx];
 
     tx.date = document.getElementById('editDate').value;
@@ -677,20 +708,26 @@ document.getElementById('saveEditBtn').addEventListener('click', () => {
 
     transactions[idx] = tx;
     transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
-    localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-    showToast('Đã cập nhật giao dịch!');
-    closeEditModal();
-    updateUI();
+    
+    const success = await saveCloudData('Đã cập nhật giao dịch!');
+    if (success) {
+        closeEditModal();
+    } else {
+        transactions = backup; // Revert on fail
+    }
 });
 
-document.getElementById('deleteTransactionBtn').addEventListener('click', () => {
+document.getElementById('deleteTransactionBtn').addEventListener('click', async () => {
     if (!editingId) return;
     if (confirm('Xoá giao dịch này?')) {
+        const backup = [...transactions];
         transactions = transactions.filter(t => t.id !== editingId);
-        localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-        showToast('Đã xoá giao dịch');
-        closeEditModal();
-        updateUI();
+        const success = await saveCloudData('Đã xoá giao dịch');
+        if (success) {
+            closeEditModal();
+        } else {
+            transactions = backup;
+        }
     }
 });
 
