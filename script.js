@@ -770,14 +770,22 @@ function applyFilter() {
         if (tx.type !== 'expense') return false;
         const d = new Date(tx.date);
         if (d < from || d > to) return false;
-        if (catVal && tx.category !== catVal) return false;
+        if (catVal) {
+            // Check if filtering by sub-category (prefixed with 'sub:')
+            if (catVal.startsWith('sub:')) {
+                const subCatFilter = catVal.substring(4);
+                if (tx.category !== 'Chi phí công ty' || tx.subCategory !== subCatFilter) return false;
+            } else {
+                if (tx.category !== catVal) return false;
+            }
+        }
         return true;
     });
 
     const total = filtered.reduce((sum, tx) => sum + tx.amount, 0);
     const fromStr = from.toLocaleDateString('vi-VN');
     const toStr = to.toLocaleDateString('vi-VN');
-    const catLabel = catVal || 'Tất cả danh mục';
+    const catLabel = catVal ? (catVal.startsWith('sub:') ? catVal.substring(4) : catVal) : 'Tất cả danh mục';
 
     let breakdown = {};
     filtered.forEach(tx => {
