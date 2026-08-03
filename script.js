@@ -137,9 +137,42 @@ async function init() {
     setupIceEvents();
     setupCloudModal();
     
-    // Automatically load data on open
-    await fetchCloudData();
+    // LOCAL-FIRST: Load from localStorage instantly (no waiting)
+    loadFromLocal();
+    updateUI();
+    renderIceUI();
+    
+    // Then sync from cloud in background (non-blocking)
+    syncFromCloud();
 }
+
+// ---------------- LOCAL STORAGE ----------------
+const LOCAL_KEY = 'finance_app_data';
+
+function saveToLocal() {
+    const data = {
+        transactions: transactions,
+        scheduledBills: scheduledBills,
+        iceLogs: iceLogs,
+        icePayments: icePayments
+    };
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+}
+
+function loadFromLocal() {
+    try {
+        const raw = localStorage.getItem(LOCAL_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data.transactions && Array.isArray(data.transactions)) transactions = data.transactions;
+        if (data.scheduledBills && Array.isArray(data.scheduledBills)) scheduledBills = data.scheduledBills;
+        if (data.iceLogs && Array.isArray(data.iceLogs)) iceLogs = data.iceLogs;
+        if (data.icePayments && Array.isArray(data.icePayments)) icePayments = data.icePayments;
+    } catch (e) {
+        console.warn('Lỗi đọc localStorage:', e);
+    }
+}
+
 // ---------------- CLOUD SYNC LOGIC ----------------
 function showGlobalLoader(text) {
     const el = document.getElementById('globalLoader');
@@ -183,54 +216,87 @@ function setupCloudModal() {
         saveBtn.onclick = async () => {
             localStorage.setItem('finance_cloud_url', urlInput.value.trim());
             cloudModal.classList.add('hidden');
-            await fetchCloudData();
+            await syncFromCloud();
         };
     }
     
-    if(syncBtn) syncBtn.style.display = 'none';
+    // Show sync button for manual re-sync
+    if(syncBtn) {
+        syncBtn.style.display = '';
+        syncBtn.onclick = async () => {
+            await syncFromCloud();
+        };
+    }
 }
 
-async function fetchCloudData() {
+// Background sync FROM cloud (pulls latest data, merges, updates UI)
+async function syncFromCloud() {
     const url = localStorage.getItem('finance_cloud_url');
     if (!url) {
-        document.getElementById('cloudModal').classList.remove('hidden');
+        // Only show modal if there's no local data either
+        if (transactions.length === 0 && scheduledBills.length === 0) {
+            document.getElementById('cloudModal').classList.remove('hidden');
+        }
         return;
     }
     
-    showGlobalLoader('Đang tải dữ liệu từ Cloud...');
+    showGlobalLoader('Đang đồng bộ từ Cloud...');
     try {
         const res = await fetch(url);
         const data = await res.json();
+        let updated = false;
+        
         if (data.transactions && Array.isArray(data.transactions)) {
-            transactions = data.transactions;
+            // Cloud has more recent/more data? Use cloud version
+            if (data.transactions.length >= transactions.length) {
+                transactions = data.transactions;
+                updated = true;
+            }
         }
         if (data.scheduledBills && Array.isArray(data.scheduledBills)) {
-            scheduledBills = data.scheduledBills;
+            if (data.scheduledBills.length >= scheduledBills.length) {
+                scheduledBills = data.scheduledBills;
+                updated = true;
+            }
         }
         if (data.iceLogs && Array.isArray(data.iceLogs)) {
-            iceLogs = data.iceLogs;
+            if (data.iceLogs.length >= iceLogs.length) {
+                iceLogs = data.iceLogs;
+                updated = true;
+            }
         }
         if (data.icePayments && Array.isArray(data.icePayments)) {
-            icePayments = data.icePayments;
+            if (data.icePayments.length >= icePayments.length) {
+                icePayments = data.icePayments;
+                updated = true;
+            }
         }
-        updateUI();
-        renderIceUI();
+        
+        if (updated) {
+            saveToLocal(); // Update local with cloud data
+            updateUI();
+            renderIceUI();
+        }
     } catch (e) {
-        console.error(e);
-        alert('Lỗi tải dữ liệu. Vui lòng kiểm tra lại mạng hoặc URL Google Sheets!');
+        console.warn('Cloud sync failed (offline?):', e);
+        // No alert - just use local data silently
     } finally {
         hideGlobalLoader();
     }
 }
 
+// Background sync TO cloud (pushes local data up, non-blocking)
 async function saveCloudData(successMsg) {
-    const url = localStorage.getItem('finance_cloud_url');
-    if (!url) {
-        alert('Chưa cấu hình URL Google Sheets!');
-        return false;
-    }
+    // ALWAYS save to local first (instant, no network needed)
+    saveToLocal();
     
-    showGlobalLoader('Đang lưu lên Cloud...');
+    if (successMsg) showToast(successMsg);
+    updateUI();
+    
+    // Then push to cloud in background
+    const url = localStorage.getItem('finance_cloud_url');
+    if (!url) return true; // No cloud URL = just local, that's fine
+    
     try {
         const res = await fetch(url, {
             method: 'POST',
@@ -242,20 +308,17 @@ async function saveCloudData(successMsg) {
             })
         });
         const data = await res.json();
-        if (data.status === 'success') {
-            if (successMsg) showToast(successMsg);
-            updateUI();
-            return true;
+        if (data.status !== 'success') {
+            console.warn('Cloud save returned non-success');
         }
-        throw new Error('Save failed');
+        return true;
     } catch (e) {
-        console.error(e);
-        alert('Lỗi lưu dữ liệu. Có thể do mất mạng.');
-        return false;
-    } finally {
-        hideGlobalLoader();
+        console.warn('Cloud sync failed (offline?). Data saved locally.', e);
+        // Data is safe in localStorage - will sync next time
+        return true;
     }
 }
+
 function updateDateInputs() {
     const today = new Date().toISOString().split('T')[0];
     const expenseDateEl = document.getElementById('expenseDate');
