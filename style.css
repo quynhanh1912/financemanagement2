@@ -32,22 +32,14 @@ body::before {
     z-index: -2;
 }
 
-html, body {
-    overflow-x: hidden;
-    width: 100%;
-    /* Added auto to ensure vertical scroll works */
-    overflow-y: auto;
-}
-
 body {
     background-color: #DCF0E2; /* Fallback */
     color: var(--text-main);
     min-height: 100vh;
     min-height: 100dvh; /* Fix bottom bar jump on iOS Safari */
-    display: flex;
-    justify-content: center;
     position: relative;
     padding: 20px;
+    overflow-x: hidden;
     
     /* Subtle depth, readable on light background */
     opacity: 1;
@@ -95,6 +87,7 @@ body {
 .app-container {
     width: 100%;
     max-width: 600px;
+    margin: 0 auto; /* Added to center container instead of body flex */
     display: flex;
     flex-direction: column;
     gap: 20px;
