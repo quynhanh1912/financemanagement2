@@ -1,0 +1,1111 @@
+// ---------------- PIN AUTHENTICATION ----------------
+const APP_PIN = "1912";
+let currentPin = "";
+let isAuth = sessionStorage.getItem('finance_auth') === 'true';
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (isAuth) {
+        document.getElementById('pinOverlay').classList.add('hidden');
+        document.getElementById('appContainer').classList.remove('hidden');
+    }
+});
+
+function enterPin(num) {
+    if (currentPin.length < 4) {
+        currentPin += num;
+        updatePinDots();
+        document.getElementById('pinError').classList.add('hidden');
+        
+        if (currentPin.length === 4) {
+            setTimeout(checkPin, 100);
+        }
+    }
+}
+
+function clearPin() {
+    currentPin = "";
+    updatePinDots();
+    document.getElementById('pinError').classList.add('hidden');
+}
+
+function deletePin() {
+    if (currentPin.length > 0) {
+        currentPin = currentPin.slice(0, -1);
+        updatePinDots();
+    }
+}
+
+function updatePinDots() {
+    const dots = document.querySelectorAll('.pin-dot');
+    dots.forEach((dot, index) => {
+        if (index < currentPin.length) {
+            dot.classList.add('filled');
+        } else {
+            dot.classList.remove('filled');
+        }
+    });
+}
+
+function checkPin() {
+    if (currentPin === APP_PIN) {
+        sessionStorage.setItem('finance_auth', 'true');
+        isAuth = true;
+        document.getElementById('pinOverlay').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('pinOverlay').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+            document.getElementById('pinOverlay').style.opacity = '1'; // reset
+        }, 300);
+    } else {
+        document.getElementById('pinError').classList.remove('hidden');
+        clearPin();
+    }
+}
+
+// ---------------- CATEGORIES ----------------
+const categories = {
+    quan: [
+        "Nguyên vật liệu quán",
+        "Chi phí chung (nước rửa chén, chất tổng hợp...)",
+        "Lương ứng trước",
+        "Thưởng nóng nhân viên"
+    ],
+    giadinh: [
+        "Chi phí ăn uống",
+        "Chi tiêu cá nhân",
+        "Chi tiêu cho anh Hiền",
+        "Chi tiêu cho mẹ",
+        "Bông Bảo",
+        "Trả góp ngân hàng"
+    ],
+    congty: [
+        "Chi phí công ty"
+    ]
+};
+
+// State
+let transactions = JSON.parse(localStorage.getItem('finance_transactions')) || [];
+
+// Migrate old company salary to scheduled bills
+let oldCompanySalary = JSON.parse(localStorage.getItem('finance_company_salary'));
+let scheduledBills = JSON.parse(localStorage.getItem('finance_scheduled_bills'));
+
+if (!scheduledBills) {
+    scheduledBills = [];
+    if (oldCompanySalary && oldCompanySalary > 0) {
+        scheduledBills.push({ id: Date.now(), name: 'Lương công ty', day: 5, amount: oldCompanySalary });
+        localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
+    }
+}
+
+const INITIAL_CAPITAL = 2777000;
+const STAFF_SALARY_PER_DAY = 300000;
+const TRASH_FEE = 160000; // Per month
+
+// Chart Instances
+let cafeChartInstance = null;
+let foodChartInstance = null;
+let personalChartInstance = null;
+
+// DOM Elements
+const totalBalanceEl = document.getElementById('totalBalance');
+const totalIncomeEl = document.getElementById('totalIncome');
+const totalExpenseEl = document.getElementById('totalExpense');
+const transactionListEl = document.getElementById('transactionList');
+
+const expenseForm = document.getElementById('expenseForm');
+const incomeForm = document.getElementById('incomeForm');
+const expenseCategory = document.getElementById('expenseCategory');
+const subCategoryGroup = document.getElementById('subCategoryGroup');
+const companySubCategoryGroup = document.getElementById('companySubCategoryGroup');
+
+const billsAlert = document.getElementById('billsAlert');
+const billsMessage = document.getElementById('billsMessage');
+const billForm = document.getElementById('billForm');
+const billList = document.getElementById('billList');
+
+// Initialize
+function init() {
+    // Set today's date as default
+    updateDateInputs();
+
+    // Auto-update date inputs every minute (handles midnight rollover)
+    setInterval(updateDateInputs, 60000);
+
+    // Attach money formatters
+    attachMoneyFormat('expenseAmount');
+    attachMoneyFormat('incomeAmount');
+    attachMoneyFormat('billAmount');
+
+    // Event Listeners
+    setupTabs();
+    setupFormEvents();
+    setupCloudSync();
+    updateUI();
+}
+
+// ---------------- CLOUD SYNC LOGIC ----------------
+function setupCloudSync() {
+    const cloudBtn = document.getElementById('cloudBtn');
+    const cloudModal = document.getElementById('cloudModal');
+    const closeBtn = cloudModal.querySelector('.close-modal');
+    const saveBtn = document.getElementById('saveCloudUrlBtn');
+    const syncBtn = document.getElementById('syncNowBtn');
+    const urlInput = document.getElementById('cloudApiUrl');
+    const msg = document.getElementById('cloudStatusMsg');
+
+    // Load saved URL
+    const savedUrl = localStorage.getItem('finance_cloud_url');
+    if (savedUrl) urlInput.value = savedUrl;
+
+    cloudBtn.onclick = () => {
+        cloudModal.classList.remove('hidden');
+        msg.style.display = 'none';
+    };
+
+    closeBtn.onclick = () => cloudModal.classList.add('hidden');
+
+    saveBtn.onclick = () => {
+        localStorage.setItem('finance_cloud_url', urlInput.value.trim());
+        msg.style.display = 'block';
+        msg.style.color = '#10b981';
+        msg.textContent = 'Đã lưu URL thành công!';
+        setTimeout(() => msg.style.display = 'none', 3000);
+    };
+
+    syncBtn.onclick = async () => {
+        const url = urlInput.value.trim();
+        if (!url) return alert('Vui lòng nhập URL!');
+        
+        syncBtn.textContent = 'Đang tải...';
+        syncBtn.disabled = true;
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.transactions && Array.isArray(data.transactions)) {
+                transactions = data.transactions;
+                localStorage.setItem('finance_transactions', JSON.stringify(transactions));
+            }
+            if (data.scheduledBills && Array.isArray(data.scheduledBills)) {
+                scheduledBills = data.scheduledBills;
+                localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
+            }
+            updateUI();
+            msg.style.display = 'block';
+            msg.style.color = '#10b981';
+            msg.textContent = 'Tải dữ liệu thành công!';
+        } catch (e) {
+            msg.style.display = 'block';
+            msg.style.color = '#f87171';
+            msg.textContent = 'Lỗi kết nối. Vui lòng kiểm tra lại URL.';
+        } finally {
+            syncBtn.textContent = 'Tải Cloud Về Máy';
+            syncBtn.disabled = false;
+        }
+    };
+}
+
+function syncToCloudBg() {
+    const url = localStorage.getItem('finance_cloud_url');
+    if (!url) return; // No cloud configured
+    
+    // Background POST request
+    fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({
+            transactions: transactions,
+            scheduledBills: scheduledBills
+        })
+    }).catch(e => console.log('Background sync failed:', e));
+}
+
+
+function updateDateInputs() {
+    const today = new Date().toISOString().split('T')[0];
+    const expenseDateEl = document.getElementById('expenseDate');
+    const incomeDateEl = document.getElementById('incomeDate');
+    // Only update if user hasn't manually changed the date
+    if (!expenseDateEl.dataset.manuallySet) expenseDateEl.value = today;
+    if (!incomeDateEl.dataset.manuallySet) incomeDateEl.value = today;
+}
+
+// Format Currency
+function formatMoney(amount) {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+// Format number input with dots as thousand separator (e.g. 1.000.000)
+function formatInput(input) {
+    // Strip all non-digit characters
+    let raw = input.value.replace(/\D/g, '');
+    if (!raw) { input.value = ''; return; }
+    // Add dots every 3 digits from the right
+    input.value = parseInt(raw, 10).toLocaleString('de-DE');
+}
+
+// Parse formatted string back to number (removes dots/commas)
+function parseAmount(str) {
+    return parseFloat(String(str).replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+// Attach auto-format to a money input
+function attachMoneyFormat(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => formatInput(el));
+    el.addEventListener('blur', () => formatInput(el));
+}
+
+// Setup Tabs
+function setupTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove active classes
+            tabBtns.forEach(b => b.classList.remove('active'));
+            document.getElementById('expenseForm').classList.replace('active-form', 'hidden-form');
+            document.getElementById('incomeForm').classList.replace('active-form', 'hidden-form');
+            
+            // Add active to clicked
+            btn.classList.add('active');
+            const tabName = btn.getAttribute('data-tab');
+            document.getElementById(`${tabName}Form`).classList.replace('hidden-form', 'active-form');
+        });
+    });
+}
+
+// Setup Form Events
+function setupFormEvents() {
+    // Payment method toggle
+    document.querySelectorAll('#payBtnCash, #payBtnCard').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#payBtnCash, #payBtnCard').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('expensePayMethod').value = btn.dataset.method;
+        });
+    });
+
+    // Show sub-category only for "Nguyên vật liệu quán" / "Chi phí công ty"
+    // Also auto-switch to cash when "Thanh toán thẻ" is selected
+    expenseCategory.addEventListener('change', () => {
+        subCategoryGroup.classList.toggle('hidden', expenseCategory.value !== 'Nguyên vật liệu quán');
+        companySubCategoryGroup.classList.toggle('hidden', expenseCategory.value !== 'Chi phí công ty');
+        // Thanh toán thẻ = always cash payment
+        if (expenseCategory.value === 'Thanh toán thẻ Techcombank') {
+            document.getElementById('payBtnCash').click();
+        }
+    });
+
+    // Submit Expense
+    expenseForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const selectedOption = expenseCategory.options[expenseCategory.selectedIndex];
+        const group = selectedOption ? selectedOption.getAttribute('data-group') : 'quan';
+        const isCardPayment = expenseCategory.value === 'Thanh toán thẻ Techcombank';
+        let subCategory = '';
+        if (expenseCategory.value === 'Nguyên vật liệu quán') {
+            subCategory = document.getElementById('expenseSubCategory').value;
+        } else if (expenseCategory.value === 'Chi phí công ty') {
+            subCategory = document.getElementById('expenseCompanySubCategory').value;
+        }
+        const tx = {
+            id: Date.now(),
+            type: 'expense',
+            date: document.getElementById('expenseDate').value,
+            amount: parseAmount(document.getElementById('expenseAmount').value),
+            name: document.getElementById('expenseName').value,
+            group: group,
+            category: expenseCategory.value,
+            subCategory: subCategory,
+            note: document.getElementById('expenseNote').value,
+            paymentMethod: isCardPayment ? 'cash' : document.getElementById('expensePayMethod').value,
+            isCardPayment: isCardPayment
+        };
+        addTransaction(tx);
+        expenseForm.reset();
+        document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+        // Reset toggle to cash
+        document.getElementById('payBtnCash').classList.add('active');
+        document.getElementById('payBtnCard').classList.remove('active');
+        document.getElementById('expensePayMethod').value = 'cash';
+        subCategoryGroup.classList.add('hidden');
+        companySubCategoryGroup.classList.add('hidden');
+    });
+
+    // Submit Income
+    incomeForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const tx = {
+            id: Date.now(),
+            type: 'income',
+            date: document.getElementById('incomeDate').value,
+            amount: parseAmount(document.getElementById('incomeAmount').value),
+            source: document.getElementById('incomeSource').value,
+            note: document.getElementById('incomeNote').value
+        };
+        addTransaction(tx);
+        incomeForm.reset();
+        document.getElementById('incomeDate').value = new Date().toISOString().split('T')[0];
+    });
+
+    // Add Scheduled Bill
+    billForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const bill = {
+            id: Date.now(),
+            name: document.getElementById('billName').value,
+            day: parseInt(document.getElementById('billDay').value),
+            amount: parseAmount(document.getElementById('billAmount').value)
+        };
+        scheduledBills.push(bill);
+        localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
+        syncToCloudBg();
+        showToast('Đã thêm lịch nhắc!');
+        billForm.reset();
+        updateUI();
+    });
+
+    // Delete Scheduled Bill
+    billList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.delete-bill-btn');
+        if (btn) {
+            const id = parseInt(btn.dataset.id);
+            scheduledBills = scheduledBills.filter(b => b.id !== id);
+            localStorage.setItem('finance_scheduled_bills', JSON.stringify(scheduledBills));
+            syncToCloudBg();
+            showToast('Đã xoá lịch nhắc');
+            updateUI();
+        }
+    });
+
+    // Reset Data
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        if(confirm('Bạn có chắc chắn muốn xoá toàn bộ dữ liệu? Hành động này không thể hoàn tác.')) {
+            transactions = [];
+            localStorage.removeItem('finance_transactions');
+            localStorage.removeItem('finance_scheduled_bills');
+            syncToCloudBg();
+            updateUI();
+            showToast('Đã xoá dữ liệu');
+        }
+    });
+
+    // Apply Filter
+    document.getElementById('applyFilterBtn').addEventListener('click', applyFilter);
+}
+
+function addTransaction(tx) {
+    transactions.push(tx);
+    // Sort by date desc
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+    localStorage.setItem('finance_transactions', JSON.stringify(transactions));
+    syncToCloudBg();
+    showToast('Đã lưu thành công!');
+    updateUI();
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// Calculate and Update UI
+function updateUI() {
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    let cafeIncome = 0; let cafeExpense = 0;
+    let companyIncome = 0; let companyExpense = 0;
+
+    // Card debt tracking (cumulative)
+    let totalCardSpend = 0;   // all expenses paid by card
+    let totalCardPaid = 0;    // all "Thanh toán thẻ" cash payments
+
+    // Cash balance outflow (excludes card expenses, includes card payments)
+    let cashOutflow = 0;
+
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+    let currentMonthAdvance = 0;
+
+    transactions.forEach(tx => {
+        if (tx.type === 'income') {
+            totalIncome += tx.amount;
+            if(tx.source === 'quan') cafeIncome += tx.amount;
+            if(tx.source === 'congty') companyIncome += tx.amount;
+        } else {
+            totalExpense += tx.amount;
+            if(tx.group === 'quan') cafeExpense += tx.amount;
+            if(tx.group === 'congty') companyExpense += tx.amount;
+
+            if (tx.isCardPayment) {
+                // Paying off card bill: reduces cash, reduces card debt
+                totalCardPaid += tx.amount;
+                cashOutflow += tx.amount;
+            } else if (tx.paymentMethod === 'card') {
+                // Card purchase: adds to card debt, does NOT reduce cash now
+                totalCardSpend += tx.amount;
+            } else {
+                // Normal cash expense
+                cashOutflow += tx.amount;
+            }
+
+            if (tx.category === 'Lương ứng trước') {
+                const txDate = new Date(tx.date);
+                if (txDate.getMonth() === curMonth && txDate.getFullYear() === curYear) {
+                    currentMonthAdvance += tx.amount;
+                }
+            }
+        }
+    });
+
+    // Cash balance = what's actually in your pocket/wallet
+    const currentBalance = INITIAL_CAPITAL + totalIncome - cashOutflow;
+    // Card debt = cumulative unpaid card charges
+    const cardDebt = Math.max(0, totalCardSpend - totalCardPaid);
+
+    // Update DOM
+    totalBalanceEl.textContent = formatMoney(currentBalance);
+    totalIncomeEl.textContent = formatMoney(totalIncome);
+    totalExpenseEl.textContent = formatMoney(totalExpense);
+
+    // Advance salary display
+    const advanceEl = document.getElementById('totalAdvance');
+    const advanceNote = document.getElementById('advanceNote');
+    if (currentMonthAdvance > 0) {
+        advanceEl.textContent = formatMoney(currentMonthAdvance);
+        advanceNote.classList.remove('hidden');
+    } else {
+        advanceEl.textContent = '0 đ';
+        advanceNote.classList.add('hidden');
+    }
+
+    // Card debt display
+    const cardDebtEl = document.getElementById('totalCardDebt');
+    const cardDebtNote = document.getElementById('cardDebtNote');
+    cardDebtEl.textContent = formatMoney(cardDebt);
+    if (cardDebt > 0) {
+        const today = now.getDate();
+        const daysTo27 = today <= 27 ? 27 - today : (new Date(curYear, curMonth + 1, 27).getDate() + (31 - today));
+        const daysLeft = today <= 27 ? 27 - today : 27 + (new Date(curYear, curMonth + 1, 0).getDate() - today);
+        cardDebtNote.classList.remove('hidden');
+        if (daysLeft <= 5) {
+            cardDebtNote.innerHTML = `⚠️ Còn <strong>${daysLeft} ngày</strong> tới ngày thanh toán thẻ (ngày 27). Cần chuẩn bị: <strong>${formatMoney(cardDebt)}</strong>`;
+            cardDebtNote.className = 'card-debt-note danger';
+        } else {
+            cardDebtNote.innerHTML = `💳 Nợ thẻ Techcombank hiện tại: <strong>${formatMoney(cardDebt)}</strong>. Thanh toán vào ngày 27 hàng tháng.`;
+            cardDebtNote.className = 'card-debt-note';
+        }
+    } else {
+        cardDebtNote.classList.add('hidden');
+    }
+
+    // Update History List
+    renderHistory();
+    renderBills();
+
+    // Alerts Logic
+    checkBillsAlert(currentBalance);
+    checkDebtAlert(currentBalance, cafeIncome - cafeExpense, companyIncome - companyExpense);
+
+    // Estimated salary card
+    renderEstimatedSalary(currentMonthAdvance);
+
+    // Inter-entity debt card
+    renderInterDebt(cafeIncome, cafeExpense, companyIncome, companyExpense);
+
+    // Personal income tax (from company personnel salary expenses)
+    renderPitTax();
+
+    // Update Charts
+    updateCharts();
+}
+
+function renderHistory() {
+    transactionListEl.innerHTML = '';
+    const recentTx = transactions.slice(0, 20);
+
+    if (recentTx.length === 0) {
+        transactionListEl.innerHTML = '<p style="color: #94a3b8; text-align: center;">Chưa có giao dịch nào.</p>';
+        return;
+    }
+
+    recentTx.forEach(tx => {
+        const div = document.createElement('div');
+        div.className = 'transaction-item';
+
+        const sourceLabel = tx.source === 'quan' ? 'Quán' : (tx.source === 'congty' ? 'Công ty' : 'Khác');
+        let title = tx.type === 'expense' ? tx.category : `Doanh thu ${sourceLabel}`;
+        if(tx.subCategory) title += ` (${tx.subCategory})`;
+        const displayName = (tx.type === 'expense' && tx.name) ? tx.name : title;
+        const subtitle = (tx.type === 'expense' && tx.name) ? title : '';
+        let dateStr = new Date(tx.date).toLocaleDateString('vi-VN');
+
+        div.innerHTML = `
+            <div class="transaction-info">
+                <span class="tx-cat">${displayName}</span>
+                <span class="tx-date">${subtitle ? subtitle + ' • ' : ''}${dateStr} ${tx.note ? '• ' + tx.note : ''}${tx.paymentMethod === 'card' ? ' <span class="card-tag">💳 Thẻ</span>' : ''}${tx.isCardPayment ? ' <span class="card-pay-tag">✅ Trả thẻ</span>' : ''}</span>
+            </div>
+            <span class="tx-amount ${tx.type === 'expense' ? 'tx-expense' : 'tx-income'}">
+                ${tx.type === 'expense' ? '-' : '+'}${formatMoney(tx.amount)}
+            </span>
+            <div class="tx-actions">
+                <button class="tx-action-btn edit" data-id="${tx.id}" title="Sửa"><i class="fas fa-pen"></i></button>
+                <button class="tx-action-btn delete" data-id="${tx.id}" title="Xoá"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+        transactionListEl.appendChild(div);
+    });
+
+    // Event delegation for edit/delete
+    transactionListEl.onclick = (e) => {
+        const editBtn = e.target.closest('.tx-action-btn.edit');
+        const deleteBtn = e.target.closest('.tx-action-btn.delete');
+        if (editBtn) openEditModal(parseInt(editBtn.dataset.id));
+        if (deleteBtn) {
+            if (confirm('Xoá giao dịch này?')) {
+                transactions = transactions.filter(t => t.id !== parseInt(deleteBtn.dataset.id));
+                localStorage.setItem('finance_transactions', JSON.stringify(transactions));
+                syncToCloudBg();
+                showToast('Đã xoá giao dịch');
+                updateUI();
+            }
+        }
+    };
+}
+
+let editingId = null;
+
+function openEditModal(id) {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+    editingId = id;
+
+    document.getElementById('editDate').value = tx.date;
+    document.getElementById('editAmount').value = tx.amount.toLocaleString('de-DE');
+    document.getElementById('editNote').value = tx.note || '';
+
+    if (tx.type === 'expense') {
+        document.getElementById('editExpenseFields').classList.remove('hidden');
+        document.getElementById('editIncomeFields').classList.add('hidden');
+        document.getElementById('editName').value = tx.name || '';
+        document.getElementById('editCategory').value = tx.category;
+
+        // Show/populate sub-category fields based on category
+        const editSubCategoryGroup = document.getElementById('editSubCategoryGroup');
+        const editCompanySubCategoryGroup = document.getElementById('editCompanySubCategoryGroup');
+        editSubCategoryGroup.classList.toggle('hidden', tx.category !== 'Nguyên vật liệu quán');
+        editCompanySubCategoryGroup.classList.toggle('hidden', tx.category !== 'Chi phí công ty');
+        if (tx.category === 'Nguyên vật liệu quán') {
+            document.getElementById('editSubCategory').value = tx.subCategory || 'Ly, bao, nắp';
+        } else if (tx.category === 'Chi phí công ty') {
+            document.getElementById('editCompanySubCategory').value = tx.subCategory || 'Chi phí chuyển phát';
+        }
+
+        // Restore payment method toggle
+        const method = tx.paymentMethod || 'cash';
+        document.getElementById('editPayMethod').value = method;
+        document.getElementById('editPayBtnCash').classList.toggle('active', method === 'cash');
+        document.getElementById('editPayBtnCard').classList.toggle('active', method === 'card');
+    } else {
+        document.getElementById('editExpenseFields').classList.add('hidden');
+        document.getElementById('editIncomeFields').classList.remove('hidden');
+        document.getElementById('editSource').value = tx.source || 'quan';
+    }
+
+    document.getElementById('editModal').classList.remove('hidden');
+    attachMoneyFormat('editAmount');
+
+    // Edit modal payment toggle
+    document.querySelectorAll('#editPayBtnCash, #editPayBtnCard').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('#editPayBtnCash, #editPayBtnCard').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('editPayMethod').value = btn.dataset.method;
+        };
+    });
+
+    // Toggle sub-category fields live if category changes within the modal
+    document.getElementById('editCategory').onchange = () => {
+        const val = document.getElementById('editCategory').value;
+        document.getElementById('editSubCategoryGroup').classList.toggle('hidden', val !== 'Nguyên vật liệu quán');
+        document.getElementById('editCompanySubCategoryGroup').classList.toggle('hidden', val !== 'Chi phí công ty');
+    };
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+    editingId = null;
+}
+
+// Modal buttons
+document.getElementById('closeModalBtn').addEventListener('click', closeEditModal);
+document.getElementById('editModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('editModal')) closeEditModal();
+});
+
+document.getElementById('saveEditBtn').addEventListener('click', () => {
+    if (!editingId) return;
+    const idx = transactions.findIndex(t => t.id === editingId);
+    if (idx === -1) return;
+    const tx = transactions[idx];
+
+    tx.date = document.getElementById('editDate').value;
+    tx.amount = parseAmount(document.getElementById('editAmount').value);
+    tx.note = document.getElementById('editNote').value;
+
+    if (tx.type === 'expense') {
+        tx.name = document.getElementById('editName').value;
+        const catEl = document.getElementById('editCategory');
+        tx.category = catEl.value;
+        tx.group = catEl.options[catEl.selectedIndex].getAttribute('data-group') || tx.group;
+        tx.isCardPayment = tx.category === 'Thanh toán thẻ Techcombank';
+        tx.paymentMethod = tx.isCardPayment ? 'cash' : (document.getElementById('editPayMethod').value || 'cash');
+        if (tx.category === 'Nguyên vật liệu quán') {
+            tx.subCategory = document.getElementById('editSubCategory').value;
+        } else if (tx.category === 'Chi phí công ty') {
+            tx.subCategory = document.getElementById('editCompanySubCategory').value;
+        } else {
+            tx.subCategory = '';
+        }
+    } else {
+        tx.source = document.getElementById('editSource').value;
+    }
+
+    transactions[idx] = tx;
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+    localStorage.setItem('finance_transactions', JSON.stringify(transactions));
+    showToast('Đã cập nhật giao dịch!');
+    closeEditModal();
+    updateUI();
+});
+
+document.getElementById('deleteTransactionBtn').addEventListener('click', () => {
+    if (!editingId) return;
+    if (confirm('Xoá giao dịch này?')) {
+        transactions = transactions.filter(t => t.id !== editingId);
+        localStorage.setItem('finance_transactions', JSON.stringify(transactions));
+        showToast('Đã xoá giao dịch');
+        closeEditModal();
+        updateUI();
+    }
+});
+
+
+function applyFilter() {
+    const fromVal = document.getElementById('filterFrom').value;
+    const toVal = document.getElementById('filterTo').value;
+    const catVal = document.getElementById('filterCategory').value;
+    const resultEl = document.getElementById('filterResult');
+
+    if (!fromVal || !toVal) {
+        resultEl.classList.remove('hidden');
+        resultEl.innerHTML = '<p class="filter-warn">⚠️ Vui lòng chọn đầy đủ khoảng ngày.</p>';
+        return;
+    }
+
+    const from = new Date(fromVal);
+    const to = new Date(toVal);
+    to.setHours(23, 59, 59);
+
+    let filtered = transactions.filter(tx => {
+        if (tx.type !== 'expense') return false;
+        const d = new Date(tx.date);
+        if (d < from || d > to) return false;
+        if (catVal && tx.category !== catVal) return false;
+        return true;
+    });
+
+    const total = filtered.reduce((sum, tx) => sum + tx.amount, 0);
+    const fromStr = from.toLocaleDateString('vi-VN');
+    const toStr = to.toLocaleDateString('vi-VN');
+    const catLabel = catVal || 'Tất cả danh mục';
+
+    let breakdown = {};
+    filtered.forEach(tx => {
+        const key = tx.subCategory ? `${tx.category} → ${tx.subCategory}` : tx.category;
+        breakdown[key] = (breakdown[key] || 0) + tx.amount;
+    });
+
+    let breakdownHTML = Object.entries(breakdown).map(([k, v]) =>
+        `<div class="filter-row-item"><span>${k}</span><span class="filter-amount">${formatMoney(v)}</span></div>`
+    ).join('');
+
+    resultEl.classList.remove('hidden');
+    resultEl.innerHTML = `
+        <div class="filter-header">
+            <span>📅 ${fromStr} → ${toStr}</span>
+            <span class="filter-tag">${catLabel}</span>
+        </div>
+        <div class="filter-breakdown">${breakdownHTML || '<p style="color:#9ca3af">Không có giao dịch nào.</p>'}</div>
+        <div class="filter-total">
+            <span>Tổng chi phí</span>
+            <strong>${formatMoney(total)}</strong>
+        </div>
+        <div class="filter-count">${filtered.length} giao dịch được tìm thấy</div>
+    `;
+}
+
+
+function renderBills() {
+    billList.innerHTML = '';
+    if (scheduledBills.length === 0) {
+        billList.innerHTML = '<p style="color: #94a3b8; text-align: center; font-size: 0.9rem;">Chưa có lịch nhắc nào.</p>';
+        return;
+    }
+
+    scheduledBills.forEach(bill => {
+        const div = document.createElement('div');
+        div.className = 'bill-item';
+        div.innerHTML = `
+            <div class="bill-item-info">
+                <span class="bill-name">${bill.name}</span>
+                <span class="bill-meta">Ngày ${bill.day} hàng tháng • ${formatMoney(bill.amount)}</span>
+            </div>
+            <button class="delete-bill-btn" data-id="${bill.id}" title="Xoá khoản này"><i class="fas fa-trash"></i></button>
+        `;
+        billList.appendChild(div);
+    });
+}
+
+function checkBillsAlert(currentBalance) {
+    const today = new Date();
+    const currentDay = today.getDate();
+    
+    // Calculate previous month's days for cafe salary
+    let prevMonth = today.getMonth() - 1;
+    let year = today.getFullYear();
+    if (prevMonth < 0) { prevMonth = 11; year--; }
+    const daysInPrevMonth = new Date(year, prevMonth + 1, 0).getDate();
+    
+    let dueBillsHTML = '';
+    let totalNeeded = 0;
+    let hasAlert = false;
+
+    // 1. Quán (Mặc định báo từ ngày 25 đến mùng 5 như cũ)
+    if (currentDay >= 25 || currentDay <= 5) {
+        hasAlert = true;
+        let advancedSalary = 0;
+        transactions.forEach(tx => {
+            if (tx.type === 'expense' && tx.category === 'Lương ứng trước') {
+                const txDate = new Date(tx.date);
+                if (txDate.getMonth() === prevMonth && txDate.getFullYear() === year) {
+                    advancedSalary += tx.amount;
+                }
+            }
+        });
+
+        const baseCafeSalary = daysInPrevMonth * STAFF_SALARY_PER_DAY;
+        const cafeSalaryNeeded = Math.max(0, baseCafeSalary - advancedSalary);
+        
+        totalNeeded += cafeSalaryNeeded;
+        dueBillsHTML += `<div style="margin-bottom: 5px;">• Lương Quán (Mùng 5): ${formatMoney(cafeSalaryNeeded)} ${advancedSalary > 0 ? `<span style="font-size:0.8rem">(đã trừ ${formatMoney(advancedSalary)} ứng)</span>` : ''}</div>`;
+    }
+
+    // 2. Các khoản đã cài đặt
+    const daysInCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    scheduledBills.forEach(bill => {
+        let daysLeft;
+        if (bill.day >= currentDay) {
+            daysLeft = bill.day - currentDay;
+        } else {
+            daysLeft = (daysInCurrentMonth - currentDay) + bill.day;
+        }
+        
+        // Báo trước 12 ngày (bao gồm cả Lương công ty mùng 5, điện nước...)
+        if (daysLeft <= 12) {
+            hasAlert = true;
+            totalNeeded += bill.amount;
+            let timeStr = daysLeft === 0 ? 'Hôm nay' : `Còn ${daysLeft} ngày`;
+            dueBillsHTML += `<div style="margin-bottom: 5px;">• ${bill.name} (Mùng ${bill.day}): ${formatMoney(bill.amount)} <span style="font-size:0.8rem; color:var(--warning)">(${timeStr})</span></div>`;
+        }
+    });
+
+    if (hasAlert) {
+        billsAlert.classList.remove('hidden');
+        let msg = dueBillsHTML;
+        msg += `<div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">`;
+        msg += `Tổng cần chuẩn bị: <strong>${formatMoney(totalNeeded)}</strong>. `;
+        
+        if (currentBalance >= totalNeeded) {
+            msg += `<span class="text-green">Đã đủ tiền!</span></div>`;
+            billsAlert.classList.replace('danger', 'warning');
+            billsAlert.querySelector('.alert-icon i').className = 'fas fa-check-circle text-green';
+        } else {
+            msg += `<span class="text-red">Còn thiếu ${formatMoney(totalNeeded - currentBalance)}</span></div>`;
+            billsAlert.classList.replace('warning', 'danger');
+            billsAlert.querySelector('.alert-icon i').className = 'fas fa-triangle-exclamation text-red';
+        }
+        
+        billsMessage.innerHTML = msg;
+    } else {
+        billsAlert.classList.add('hidden');
+    }
+}
+
+function checkDebtAlert(currentBalance, cafeNet, companyNet) {
+    if (currentBalance < 0) {
+        debtAlert.classList.remove('hidden');
+        const debtAmt = Math.abs(currentBalance);
+        let msg = `Bạn đang âm <strong>${formatMoney(debtAmt)}</strong>.<br>`;
+        
+        if (cafeNet < 0 && companyNet >= 0) {
+            msg += `Nguyên nhân chính do <strong>Quán</strong> đang lỗ ${formatMoney(Math.abs(cafeNet))}.`;
+        } else if (companyNet < 0 && cafeNet >= 0) {
+            msg += `Nguyên nhân chính do <strong>Công ty</strong> đang lỗ ${formatMoney(Math.abs(companyNet))}.`;
+        } else if (cafeNet < 0 && companyNet < 0) {
+            msg += `Cả Quán (lỗ ${formatMoney(Math.abs(cafeNet))}) và Công ty (lỗ ${formatMoney(Math.abs(companyNet))}) đều bị âm.`;
+        } else {
+            msg += `Khoản âm này đến từ Chi tiêu Gia đình.`;
+        }
+        
+        debtMessage.innerHTML = msg;
+    } else {
+        debtAlert.classList.add('hidden');
+    }
+}
+
+// ---------------- ESTIMATED SALARY ----------------
+function renderEstimatedSalary(currentMonthAdvance) {
+    const today = new Date();
+    const daysPassed = today.getDate();
+    // Gross estimate: 300k x days passed
+    const gross = daysPassed * STAFF_SALARY_PER_DAY;
+    // Deduct advance taken this month
+    const net = Math.max(0, gross - currentMonthAdvance);
+
+    const el = document.getElementById('estimatedSalary');
+    const noteEl = document.getElementById('estimatedSalaryNote');
+    if (!el) return;
+
+    el.textContent = formatMoney(net);
+    let noteText = `(${daysPassed} ngày × 300.000đ`;
+    if (currentMonthAdvance > 0) {
+        noteText += ` − ứng ${formatMoney(currentMonthAdvance)}`;
+    }
+    noteText += ')';
+    noteEl.textContent = noteText;
+}
+
+// ---------------- INTER-ENTITY DEBT ----------------
+function renderInterDebt(cafeIncome, cafeExpense, companyIncome, companyExpense) {
+    const cafeNet = cafeIncome - cafeExpense;           // >0 = Quán lãi, <0 = Quán lỗ
+    const companyNet = companyIncome - companyExpense;  // >0 = CT lãi, <0 = CT lỗ
+
+    const amountEl = document.getElementById('interDebtAmount');
+    const noteEl = document.getElementById('interDebtNote');
+    if (!amountEl) return;
+
+    const cafeLoss    = cafeNet < -999;
+    const companyLoss = companyNet < -999;
+
+    if (companyLoss && !cafeLoss) {
+        // CT lỗ → CT phải dùng tiền quỹ chung (của Quán) để bù → CT nợ Quán
+        amountEl.textContent = formatMoney(Math.abs(companyNet));
+        amountEl.style.color = '#F0654B';
+        noteEl.textContent = '⚠️ Công ty nợ Quán';
+    } else if (cafeLoss && !companyLoss) {
+        // Quán lỗ → Quán phải dùng tiền quỹ chung (có của CT) → Quán nợ Công ty
+        amountEl.textContent = formatMoney(Math.abs(cafeNet));
+        amountEl.style.color = '#F0654B';
+        noteEl.textContent = '⚠️ Quán nợ Công ty';
+    } else if (cafeLoss && companyLoss) {
+        // Cả hai đều lỗ → hiển thị bên nào lỗ nhiều hơn
+        const total = Math.abs(cafeNet) + Math.abs(companyNet);
+        amountEl.textContent = formatMoney(total);
+        amountEl.style.color = '#F0654B';
+        noteEl.textContent = `⚠️ Quán lỗ ${formatMoney(Math.abs(cafeNet))} • CT lỗ ${formatMoney(Math.abs(companyNet))}`;
+    } else {
+        // Không bên nào lỗ
+        amountEl.textContent = 'Không nợ';
+        amountEl.style.color = 'var(--primary)';
+        noteEl.textContent = '✅ Quán và Công ty đều không nợ nhau';
+    }
+}
+
+// ---------------- PERSONAL INCOME TAX (Chi phí nhân sự - Công ty) ----------------
+function renderPitTax() {
+    const amountEl = document.getElementById('pitTaxAmount');
+    const noteEl = document.getElementById('pitTaxNote');
+    if (!amountEl) return;
+
+    const today = new Date();
+    const curMonth = today.getMonth();
+    const curYear = today.getFullYear();
+    const PIT_THRESHOLD = 5000000;
+
+    let totalTax = 0;
+    let qualifyingCount = 0;
+    let totalSalary = 0;
+
+    transactions.forEach(tx => {
+        if (tx.type === 'expense' && tx.category === 'Chi phí công ty' && tx.subCategory === 'Chi phí nhân sự') {
+            const txDate = new Date(tx.date);
+            if (txDate.getMonth() === curMonth && txDate.getFullYear() === curYear) {
+                if (tx.amount >= PIT_THRESHOLD) {
+                    const tax = tx.amount / 0.9 - tx.amount;
+                    totalTax += tax;
+                    totalSalary += tx.amount;
+                    qualifyingCount++;
+                }
+            }
+        }
+    });
+
+    amountEl.textContent = formatMoney(totalTax);
+    if (qualifyingCount > 0) {
+        amountEl.style.color = 'var(--danger)';
+        noteEl.textContent = `${qualifyingCount} khoản lương ≥ 5tr • Tổng lương ${formatMoney(totalSalary)}`;
+    } else {
+        amountEl.style.color = 'var(--primary)';
+        noteEl.textContent = 'Chưa có khoản lương nào ≥ 5.000.000đ';
+    }
+}
+
+// ---------------- CHART LOGIC ----------------
+function updateCharts() {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const daysPassed = today.getDate();
+
+    let cafeRevenue = 0;
+    let allCafeCost = 0;  // ALL quan-group expenses
+    let foodCost = 0;
+    let personalCost = 0;
+
+    transactions.forEach(tx => {
+        const txDate = new Date(tx.date);
+        if (txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
+            if (tx.type === 'income' && tx.source === 'quan') {
+                cafeRevenue += tx.amount;
+            }
+            if (tx.type === 'expense') {
+                // Count ALL quan expenses (nguyên liệu, chi phí chung, lương ứng, thưởng...)
+                if (tx.group === 'quan') {
+                    allCafeCost += tx.amount;
+                }
+                if (tx.group === 'giadinh' && tx.category === 'Chi phí ăn uống') {
+                    foodCost += tx.amount;
+                }
+                if (tx.group === 'giadinh' && tx.category === 'Chi tiêu cá nhân') {
+                    personalCost += tx.amount;
+                }
+            }
+        }
+    });
+
+    // Removed: auto salary accumulation
+    // Chart uses only ACTUAL recorded expenses
+    renderCafeChart(allCafeCost, cafeRevenue);
+    renderFoodChart(foodCost);
+    renderPersonalChart(personalCost);
+}
+
+const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '75%',
+    plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+    }
+};
+
+function createDonut(ctx, dataValues, colors) {
+    return new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: dataValues,
+                backgroundColor: colors,
+                borderWidth: 0,
+                borderRadius: 5
+            }]
+        },
+        options: commonOptions
+    });
+}
+
+function renderCafeChart(cost, revenue) {
+    if (cafeChartInstance) cafeChartInstance.destroy();
+    const ctx = document.getElementById('cafeChart');
+    const label = document.getElementById('cafeChartLabel');
+    
+    if (revenue === 0) {
+        cafeChartInstance = createDonut(ctx, [1, 0], ['#94a3b8', '#1e293b']);
+        label.innerHTML = 'Chưa có<br>doanh thu';
+        label.className = 'chart-label';
+        return;
+    }
+
+    const ratio = cost / revenue;
+    const ratioPercent = Math.round(ratio * 100);
+    const isDanger = ratio > 0.65;
+    const color = isDanger ? '#F0654B' : '#22B573';
+    
+    let remaining = revenue - cost;
+    if (remaining < 0) remaining = 0;
+
+    cafeChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    
+    // Show amount AND percentage inside chart
+    label.innerHTML = `
+        <span style="font-size:0.95rem; font-weight:700; display:block;">${formatMoney(cost)}</span>
+        <span style="font-size:0.8rem; opacity:0.75;">Chi phí: ${ratioPercent}%</span>
+        ${isDanger ? '<span style="font-size:0.72rem; color:#F0654B;">(Lợi nhuận giảm)</span>' : ''}
+    `;
+    label.className = isDanger ? 'chart-label danger' : 'chart-label';
+}
+
+function renderFoodChart(cost) {
+    if (foodChartInstance) foodChartInstance.destroy();
+    const ctx = document.getElementById('foodChart');
+    const label = document.getElementById('foodChartLabel');
+    const limit = 6000000;
+    
+    let remaining = limit - cost;
+    const isDanger = remaining < 0;
+    if (remaining < 0) remaining = 0;
+    
+    const color = isDanger ? '#F0654B' : '#F2A93B'; // Amber for food
+
+    foodChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    
+    if (isDanger) {
+        label.innerHTML = `Vượt mức<br>${formatMoney(cost - limit)}`;
+        label.className = 'chart-label danger';
+    } else {
+        label.innerHTML = `Còn lại<br>${formatMoney(limit - cost)}`;
+        label.className = 'chart-label';
+    }
+}
+
+function renderPersonalChart(cost) {
+    if (personalChartInstance) personalChartInstance.destroy();
+    const ctx = document.getElementById('personalChart');
+    const label = document.getElementById('personalChartLabel');
+    const limit = 3500000;
+    
+    let remaining = limit - cost;
+    const isDanger = remaining < 0;
+    if (remaining < 0) remaining = 0;
+    
+    const color = isDanger ? '#F0654B' : '#3FBF9F'; // Teal-mint for personal
+
+    personalChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    
+    if (isDanger) {
+        label.innerHTML = `Vượt mức<br>${formatMoney(cost - limit)}`;
+        label.className = 'chart-label danger';
+    } else {
+        label.innerHTML = `Còn lại<br>${formatMoney(limit - cost)}`;
+        label.className = 'chart-label';
+    }
+}
+
+// Start
+init();

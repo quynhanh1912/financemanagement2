@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quản Lý Tài Chính</title>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#10b981">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tài Chính">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+      }
+    </script>
+</head>
+<body>
+    <div class="bg-shape bg-shape-1"></div>
+    <div class="bg-shape bg-shape-2"></div>
+    
+    <!-- PIN Lock Screen -->
+    <div id="pinOverlay" class="pin-overlay">
+        <div class="pin-card glass-card">
+            <h2><i class="fas fa-lock"></i> Nhập mã PIN</h2>
+            <p>Vui lòng nhập mã PIN để truy cập ứng dụng</p>
+            <div class="pin-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            <div class="pin-pad">
+                <button class="pin-btn" onclick="enterPin(1)">1</button>
+                <button class="pin-btn" onclick="enterPin(2)">2</button>
+                <button class="pin-btn" onclick="enterPin(3)">3</button>
+                <button class="pin-btn" onclick="enterPin(4)">4</button>
+                <button class="pin-btn" onclick="enterPin(5)">5</button>
+                <button class="pin-btn" onclick="enterPin(6)">6</button>
+                <button class="pin-btn" onclick="enterPin(7)">7</button>
+                <button class="pin-btn" onclick="enterPin(8)">8</button>
+                <button class="pin-btn" onclick="enterPin(9)">9</button>
+                <button class="pin-btn pin-btn-icon" onclick="clearPin()"><i class="fas fa-times"></i></button>
+                <button class="pin-btn" onclick="enterPin(0)">0</button>
+                <button class="pin-btn pin-btn-icon" onclick="deletePin()"><i class="fas fa-backspace"></i></button>
+            </div>
+            <p id="pinError" class="pin-error hidden">Mã PIN không đúng!</p>
+        </div>
+    </div>
+
+    <div class="app-container hidden" id="appContainer">
+        <!-- Header / Dashboard -->
+        <header class="glass-card balance-card">
+            <div class="balance-header">
+                <h2>Tổng số dư hiện tại</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button id="cloudBtn" class="icon-btn" title="Đồng bộ Cloud"><i class="fas fa-cloud"></i></button>
+                    <button id="resetBtn" class="icon-btn" title="Xóa dữ liệu"><i class="fas fa-rotate-right"></i></button>
+                </div>
+            </div>
+            <h1 id="totalBalance">0 đ</h1>
+            
+            <div class="stats-row">
+                <div class="stat-box">
+                    <i class="fas fa-arrow-trend-up text-green"></i>
+                    <div>
+                        <span class="stat-label">Tổng thu</span>
+                        <span id="totalIncome" class="stat-value">0 đ</span>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-arrow-trend-down text-red"></i>
+                    <div>
+                        <span class="stat-label">Tổng chi</span>
+                        <span id="totalExpense" class="stat-value">0 đ</span>
+                    </div>
+                </div>
+                <div class="stat-box advance-stat">
+                    <i class="fas fa-hand-holding-dollar" style="color: var(--warning);"></i>
+                    <div>
+                        <span class="stat-label">Lương ứng (tháng này)</span>
+                        <span id="totalAdvance" class="stat-value" style="color: var(--warning);">0 đ</span>
+                    </div>
+                </div>
+                <div class="stat-box card-debt-stat">
+                    <i class="fas fa-credit-card" style="color: #a78bfa;"></i>
+                    <div>
+                        <span class="stat-label">Nợ thẻ TCB</span>
+                        <span id="totalCardDebt" class="stat-value" style="color: #a78bfa;">0 đ</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Advance salary note -->
+            <p id="advanceNote" class="advance-note hidden">Số này sẽ tự động trừ vào lương Quán mùng 5 tháng sau.</p>
+            <!-- Card debt note -->
+            <p id="cardDebtNote" class="card-debt-note hidden"></p>
+        </header>
+
+        <!-- Warnings / Debt -->
+        <section class="alerts-container">
+            <!-- Analytics Dashboard -->
+            <div class="glass-card analytics-card">
+                <h3 class="section-title"><i class="fas fa-chart-pie"></i> Báo cáo tháng này</h3>
+                <div class="charts-wrapper">
+                    <!-- Chart 1: Quán -->
+                    <div class="chart-box">
+                        <h4>Chi phí / Doanh thu Quán</h4>
+                        <div class="canvas-container">
+                            <canvas id="cafeChart"></canvas>
+                        </div>
+                        <p id="cafeChartLabel" class="chart-label">Đang tính...</p>
+                    </div>
+                    <!-- Chart 2: Ăn uống -->
+                    <div class="chart-box">
+                        <h4>Ngân sách ăn uống</h4>
+                        <div class="canvas-container">
+                            <canvas id="foodChart"></canvas>
+                        </div>
+                        <p id="foodChartLabel" class="chart-label">Trần: 6.000.000đ</p>
+                    </div>
+                    <!-- Chart 3: Cá nhân -->
+                    <div class="chart-box">
+                        <h4>Chi tiêu cá nhân</h4>
+                        <div class="canvas-container">
+                            <canvas id="personalChart"></canvas>
+                        </div>
+                        <p id="personalChartLabel" class="chart-label">Trần: 3.500.000đ</p>
+                    </div>
+                </div>
+
+                <!-- Extra info cards row -->
+                <div class="report-info-row">
+                    <!-- Dự tính lương nhân viên -->
+                    <div class="report-info-card salary-estimate-card">
+                        <div class="ric-icon"><i class="fas fa-user-clock"></i></div>
+                        <div class="ric-body">
+                            <span class="ric-label">Dự tính lương NV quán</span>
+                            <span id="estimatedSalary" class="ric-value">0 đ</span>
+                            <span id="estimatedSalaryNote" class="ric-note"></span>
+                        </div>
+                    </div>
+                    <!-- Nợ giữa Quán và Công ty -->
+                    <div class="report-info-card inter-debt-card">
+                        <div class="ric-icon"><i class="fas fa-scale-balanced"></i></div>
+                        <div class="ric-body">
+                            <span class="ric-label">Nợ Quán / Công ty</span>
+                            <span id="interDebtAmount" class="ric-value">0 đ</span>
+                            <span id="interDebtNote" class="ric-note"></span>
+                        </div>
+                    </div>
+                    <!-- Thuế TNCN nhân sự công ty -->
+                    <div class="report-info-card tax-card">
+                        <div class="ric-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="ric-body">
+                            <span class="ric-label">Thuế TNCN cần đóng</span>
+                            <span id="pitTaxAmount" class="ric-value">0 đ</span>
+                            <span id="pitTaxNote" class="ric-note"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upcoming Bills Alert -->
+            <div id="billsAlert" class="glass-card alert-card warning hidden">
+                <div class="alert-icon"><i class="fas fa-bell"></i></div>
+                <div class="alert-content">
+                    <h3>Sắp tới ngày thanh toán!</h3>
+                    <p id="billsMessage">Đang tính toán...</p>
+                </div>
+            </div>
+            
+            <!-- Debt Alert -->
+            <div id="debtAlert" class="glass-card alert-card danger hidden">
+                <div class="alert-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                <div class="alert-content">
+                    <h3>Khoản nợ tháng trước</h3>
+                    <p id="debtMessage">Đang tính toán...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-container glass-card">
+            <button class="tab-btn active" data-tab="expense">
+                <i class="fas fa-minus-circle"></i> Nhập Chi Phí
+            </button>
+            <button class="tab-btn" data-tab="income">
+                <i class="fas fa-plus-circle"></i> Nhập Doanh Thu
+            </button>
+        </div>
+
+        <!-- Form Section -->
+        <section class="form-section glass-card">
+            <!-- Expense Form -->
+            <form id="expenseForm" class="active-form">
+                <div class="form-group">
+                    <label>Ngày</label>
+                    <input type="date" id="expenseDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Số tiền (VNĐ)</label>
+                    <input type="text" inputmode="numeric" id="expenseAmount" placeholder="VD: 100.000" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Tên chi phí <span style="color:var(--text-muted); font-size:0.82rem">(Tuỳ chọn)</span></label>
+                    <input type="text" id="expenseName" placeholder="VD: Mua chanh, Tiền điện tháng 8...">
+                </div>
+
+                <!-- Single grouped category select -->
+                <div class="form-group">
+                    <label>Phân loại chi phí</label>
+                    <select id="expenseCategory" required>
+                        <option value="" disabled selected>Chọn loại chi phí...</option>
+                        <optgroup label="🏪 Quán">
+                            <option value="Nguyên vật liệu quán" data-group="quan">Nguyên vật liệu quán</option>
+                            <option value="Chi phí chung" data-group="quan">Chi phí chung (nước rửa chén, chất tổng hợp...)</option>
+                            <option value="Lương ứng trước" data-group="quan">Lương ứng trước</option>
+                            <option value="Thưởng nóng nhân viên" data-group="quan">Thưởng nóng nhân viên</option>
+                            <option value="Chi lương tháng trước" data-group="quan" data-salary-paid="true">Chi lương tháng trước (mùng 5)</option>
+                        </optgroup>
+                        <optgroup label="🏠 Gia đình">
+                            <option value="Chi phí ăn uống" data-group="giadinh">Chi phí ăn uống</option>
+                            <option value="Chi tiêu cá nhân" data-group="giadinh">Chi tiêu cá nhân</option>
+                            <option value="Chi tiêu cho anh Hiền" data-group="giadinh">Chi tiêu cho anh Hiền</option>
+                            <option value="Chi tiêu cho mẹ" data-group="giadinh">Chi tiêu cho mẹ</option>
+                            <option value="Bông Bảo" data-group="giadinh">Bông Bảo</option>
+                            <option value="Trả góp ngân hàng" data-group="giadinh">Trả góp ngân hàng</option>
+                        </optgroup>
+                        <optgroup label="🏢 Công ty">
+                            <option value="Chi phí công ty" data-group="congty">Chi phí công ty</option>
+                        </optgroup>
+                        <optgroup label="💳 Thanh toán thẻ">
+                            <option value="Thanh toán thẻ Techcombank" data-group="the" data-card-payment="true">Thanh toán thẻ Techcombank</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <!-- Payment method toggle -->
+                <div class="form-group">
+                    <label>Tiền chi qua</label>
+                    <div class="payment-toggle">
+                        <button type="button" class="pay-btn active" data-method="cash" id="payBtnCash">
+                            <i class="fas fa-money-bill-wave"></i> Tiền mặt
+                        </button>
+                        <button type="button" class="pay-btn" data-method="card" id="payBtnCard">
+                            <i class="fas fa-credit-card"></i> Thẻ Techcombank
+                        </button>
+                    </div>
+                    <input type="hidden" id="expensePayMethod" value="cash">
+                </div>
+
+                <!-- Sub-category for Nguyên vật liệu quán -->
+                <div class="form-group hidden" id="subCategoryGroup">
+                    <label>Chi tiết nguyên vật liệu</label>
+                    <select id="expenseSubCategory">
+                        <option value="Ly, bao, nắp">Ly, bao, nắp</option>
+                        <option value="Nguyên vật liệu tươi">Nguyên vật liệu tươi (trái cây)</option>
+                        <option value="Nguyên vật liệu khác">Nguyên vật liệu khác</option>
+                    </select>
+                </div>
+
+                <!-- Sub-category for Chi phí công ty -->
+                <div class="form-group hidden" id="companySubCategoryGroup">
+                    <label>Chi tiết chi phí công ty</label>
+                    <select id="expenseCompanySubCategory">
+                        <option value="Chi phí chuyển phát">Chi phí chuyển phát</option>
+                        <option value="Chi phí vận chuyển">Chi phí vận chuyển</option>
+                        <option value="Chi phí sub">Chi phí sub</option>
+                        <option value="Chi phí nhân sự">Chi phí nhân sự</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Ghi chú (Tuỳ chọn)</label>
+                    <input type="text" id="expenseNote" placeholder="Ghi chú thêm...">
+                </div>
+                <button type="submit" class="submit-btn btn-expense">Lưu Chi Phí</button>
+            </form>
+
+            <!-- Income Form -->
+            <form id="incomeForm" class="hidden-form">
+                <div class="form-group">
+                    <label>Ngày</label>
+                    <input type="date" id="incomeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Số tiền (VNĐ)</label>
+                    <input type="text" inputmode="numeric" id="incomeAmount" placeholder="VD: 500.000" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Nguồn Doanh Thu</label>
+                    <select id="incomeSource" required>
+                        <option value="quan">Quán</option>
+                        <option value="congty">Công ty</option>
+                        <option value="khac">Doanh thu khác</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Ghi chú (Tuỳ chọn)</label>
+                    <input type="text" id="incomeNote" placeholder="Ghi chú thêm...">
+                </div>
+                <button type="submit" class="submit-btn btn-income">Lưu Doanh Thu</button>
+            </form>
+        </section>
+        
+        <!-- Settings Form (Scheduled Bills) -->
+        <section class="settings-section glass-card">
+            <h3 class="section-title"><i class="fas fa-calendar-alt"></i> Nhắc lịch thanh toán cố định</h3>
+            <form id="billForm" class="bill-form">
+                <div class="form-group">
+                    <input type="text" id="billName" placeholder="Tên chi phí (VD: Tiền điện, Lãi ngân hàng)" required>
+                </div>
+                <div class="bill-row">
+                    <div class="form-group" style="flex: 1;">
+                        <input type="number" id="billDay" placeholder="Ngày (1-31)" min="1" max="31" required>
+                    </div>
+                    <div class="form-group" style="flex: 2;">
+                        <input type="text" inputmode="numeric" id="billAmount" placeholder="Số tiền ước tính" required autocomplete="off">
+                    </div>
+                    <button type="submit" class="small-btn add-bill-btn">Thêm</button>
+                </div>
+            </form>
+            <div id="billList" class="bill-list">
+                <!-- Bills injected by JS -->
+            </div>
+        </section>
+
+        <!-- Filter Section -->
+        <section class="filter-section glass-card">
+            <h3 class="section-title"><i class="fas fa-filter"></i> Bộ lọc chi phí</h3>
+            <div class="filter-form">
+                <div class="filter-row">
+                    <div class="form-group">
+                        <label>Từ ngày</label>
+                        <input type="date" id="filterFrom">
+                    </div>
+                    <div class="form-group">
+                        <label>Đến ngày</label>
+                        <input type="date" id="filterTo">
+                    </div>
+                    <div class="form-group" style="flex: 2;">
+                        <label>Phân loại</label>
+                        <select id="filterCategory">
+                            <option value="">Tất cả</option>
+                            <optgroup label="🏪 Quán">
+                                <option value="Nguyên vật liệu quán">Nguyên vật liệu quán</option>
+                                <option value="Chi phí chung">Chi phí chung</option>
+                                <option value="Lương ứng trước">Lương ứng trước</option>
+                                <option value="Thưởng nóng nhân viên">Thưởng nóng nhân viên</option>
+                            </optgroup>
+                            <optgroup label="🏠 Gia đình">
+                                <option value="Chi phí ăn uống">Chi phí ăn uống</option>
+                                <option value="Chi tiêu cá nhân">Chi tiêu cá nhân</option>
+                                <option value="Chi tiêu cho anh Hiền">Chi tiêu cho anh Hiền</option>
+                                <option value="Chi tiêu cho mẹ">Chi tiêu cho mẹ</option>
+                                <option value="Bông Bảo">Bông Bảo</option>
+                                <option value="Trả góp ngân hàng">Trả góp ngân hàng</option>
+                            </optgroup>
+                            <optgroup label="🏢 Công ty">
+                                <option value="Chi phí công ty">Chi phí công ty</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <button id="applyFilterBtn" class="small-btn" style="height:44px; margin-top: 22px;">Lọc</button>
+                </div>
+            </div>
+            <div id="filterResult" class="filter-result hidden">
+                <!-- Result injected by JS -->
+            </div>
+        </section>
+
+        <!-- History -->
+        <section class="history-section glass-card">
+            <h3 class="section-title">Giao dịch gần đây</h3>
+            <div id="transactionList" class="transaction-list">
+                <!-- Transactions injected by JS -->
+            </div>
+        </section>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Đã lưu thành công!</div>
+
+    <!-- Edit Transaction Modal -->
+    <div id="editModal" class="modal-overlay hidden">
+        <div class="modal-card glass-card">
+            <div class="modal-header">
+                <h3><i class="fas fa-pen-to-square"></i> Chỉnh sửa giao dịch</h3>
+                <button id="closeModalBtn" class="icon-btn"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Ngày</label>
+                    <input type="date" id="editDate">
+                </div>
+                <div class="form-group">
+                    <label>Số tiền (VNĐ)</label>
+                    <input type="text" inputmode="numeric" id="editAmount" autocomplete="off">
+                </div>
+                <div id="editExpenseFields">
+                    <div class="form-group">
+                        <label>Tên chi phí</label>
+                        <input type="text" id="editName" placeholder="Tên chi phí (tuỳ chọn)">
+                    </div>
+                    <div class="form-group">
+                        <label>Phân loại</label>
+                        <select id="editCategory">
+                            <optgroup label="🏪 Quán">
+                                <option value="Nguyên vật liệu quán" data-group="quan">Nguyên vật liệu quán</option>
+                                <option value="Chi phí chung" data-group="quan">Chi phí chung</option>
+                                <option value="Lương ứng trước" data-group="quan">Lương ứng trước</option>
+                                <option value="Thưởng nóng nhân viên" data-group="quan">Thưởng nóng nhân viên</option>
+                                <option value="Chi lương tháng trước" data-group="quan" data-salary-paid="true">Chi lương tháng trước (mùng 5)</option>
+                            </optgroup>
+                            <optgroup label="🏠 Gia đình">
+                                <option value="Chi phí ăn uống" data-group="giadinh">Chi phí ăn uống</option>
+                                <option value="Chi tiêu cá nhân" data-group="giadinh">Chi tiêu cá nhân</option>
+                                <option value="Chi tiêu cho anh Hiền" data-group="giadinh">Chi tiêu cho anh Hiền</option>
+                                <option value="Chi tiêu cho mẹ" data-group="giadinh">Chi tiêu cho mẹ</option>
+                                <option value="Bông Bảo" data-group="giadinh">Bông Bảo</option>
+                                <option value="Trả góp ngân hàng" data-group="giadinh">Trả góp ngân hàng</option>
+                            </optgroup>
+                            <optgroup label="🏢 Công ty">
+                                <option value="Chi phí công ty" data-group="congty">Chi phí công ty</option>
+                            </optgroup>
+                            <optgroup label="💳 Thanh toán thẻ">
+                                <option value="Thanh toán thẻ Techcombank" data-group="the" data-card-payment="true">Thanh toán thẻ Techcombank</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="form-group hidden" id="editSubCategoryGroup">
+                        <label>Chi tiết nguyên vật liệu</label>
+                        <select id="editSubCategory">
+                            <option value="Ly, bao, nắp">Ly, bao, nắp</option>
+                            <option value="Nguyên vật liệu tươi">Nguyên vật liệu tươi (trái cây)</option>
+                            <option value="Nguyên vật liệu khác">Nguyên vật liệu khác</option>
+                        </select>
+                    </div>
+                    <div class="form-group hidden" id="editCompanySubCategoryGroup">
+                        <label>Chi tiết chi phí công ty</label>
+                        <select id="editCompanySubCategory">
+                            <option value="Chi phí chuyển phát">Chi phí chuyển phát</option>
+                            <option value="Chi phí vận chuyển">Chi phí vận chuyển</option>
+                            <option value="Chi phí sub">Chi phí sub</option>
+                            <option value="Chi phí nhân sự">Chi phí nhân sự</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tiền chi qua</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="pay-btn active" data-method="cash" id="editPayBtnCash">
+                                <i class="fas fa-money-bill-wave"></i> Tiền mặt
+                            </button>
+                            <button type="button" class="pay-btn" data-method="card" id="editPayBtnCard">
+                                <i class="fas fa-credit-card"></i> Thẻ Techcombank
+                            </button>
+                        </div>
+                        <input type="hidden" id="editPayMethod" value="cash">
+                    </div>
+                </div>
+                <div id="editIncomeFields" class="hidden">
+                    <div class="form-group">
+                        <label>Nguồn doanh thu</label>
+                        <select id="editSource">
+                            <option value="quan">Quán</option>
+                            <option value="congty">Công ty</option>
+                            <option value="khac">Doanh thu khác</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Ghi chú</label>
+                    <input type="text" id="editNote" placeholder="Ghi chú...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="deleteTransactionBtn" class="modal-btn btn-delete"><i class="fas fa-trash"></i> Xoá</button>
+                <button id="saveEditBtn" class="modal-btn btn-save"><i class="fas fa-check"></i> Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cloud Config Modal -->
+    <div id="cloudModal" class="modal-overlay hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2><i class="fas fa-cloud"></i> Đồng bộ Google Sheets</h2>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">
+                    Nhập Web App URL của Google Apps Script để đồng bộ dữ liệu.
+                </p>
+                <div class="form-group">
+                    <label>API URL</label>
+                    <input type="text" id="cloudApiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="saveCloudUrlBtn" class="submit-btn" style="flex: 1; background: var(--primary);">Lưu URL</button>
+                    <button id="syncNowBtn" class="submit-btn" style="flex: 1; background: #6366f1;">Tải Cloud Về Máy</button>
+                </div>
+                <p id="cloudStatusMsg" style="margin-top: 15px; font-size: 0.85rem; text-align: center; display: none;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
