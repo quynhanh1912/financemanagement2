@@ -1270,21 +1270,24 @@ function setupIceEvents() {
         }
     });
 
-    // Delete ice log
-    document.getElementById('iceLogList').addEventListener('click', async (e) => {
-        const btn = e.target.closest('.ice-delete-btn');
-        if (!btn) return;
-        const id = parseInt(btn.dataset.id);
-        if (!confirm('Xoá mục đá này?')) return;
-        const backup = [...iceLogs];
-        iceLogs = iceLogs.filter(l => l.id !== id);
-        const success = await saveCloudData('Đã xoá mục đá');
-        if (success) {
-            renderIceUI();
-        } else {
-            iceLogs = backup;
-        }
-    });
+    // Delete ice log (only if element exists in DOM)
+    const iceLogListEl = document.getElementById('iceLogList');
+    if (iceLogListEl) {
+        iceLogListEl.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.ice-delete-btn');
+            if (!btn) return;
+            const id = parseInt(btn.dataset.id);
+            if (!confirm('Xoá mục đá này?')) return;
+            const backup = [...iceLogs];
+            iceLogs = iceLogs.filter(l => l.id !== id);
+            const success = await saveCloudData('Đã xoá mục đá');
+            if (success) {
+                renderIceUI();
+            } else {
+                iceLogs = backup;
+            }
+        });
+    }
 
     // Query ice
     document.getElementById('iceQueryBtn').addEventListener('click', () => {
@@ -1333,65 +1336,71 @@ function setupIceEvents() {
         `;
     });
 
-    // Pay ice
-    document.getElementById('icePayBtn').addEventListener('click', async () => {
-        const qtyVal = parseInt(document.getElementById('icePayQty').value);
-        const amountVal = parseAmount(document.getElementById('icePayAmount').value);
-        if (!qtyVal || qtyVal < 1 || !amountVal) {
-            alert('Vui lòng nhập số bao và số tiền thanh toán.');
-            return;
-        }
-        const payment = {
-            id: Date.now(),
-            date: new Date().toISOString().split('T')[0],
-            qty: qtyVal,
-            amount: amountVal
-        };
-        icePayments.push(payment);
-        
-        // Also add as a shop expense (chi phí quán)
-        const tx = {
-            id: Date.now() + 1,
-            type: 'expense',
-            date: payment.date,
-            amount: amountVal,
-            name: `Thanh toán đá (${qtyVal} bao)`,
-            group: 'quan',
-            category: 'Chi phí chung',
-            subCategory: '',
-            note: `Thanh toán ${qtyVal} bao đá`,
-            paymentMethod: 'cash',
-            isCardPayment: false
-        };
-        transactions.push(tx);
-        transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+    // Pay ice (only if element exists)
+    const icePayBtnEl = document.getElementById('icePayBtn');
+    if (icePayBtnEl) {
+        icePayBtnEl.addEventListener('click', async () => {
+            const qtyVal = parseInt(document.getElementById('icePayQty').value);
+            const amountVal = parseAmount(document.getElementById('icePayAmount').value);
+            if (!qtyVal || qtyVal < 1 || !amountVal) {
+                alert('Vui lòng nhập số bao và số tiền thanh toán.');
+                return;
+            }
+            const payment = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                qty: qtyVal,
+                amount: amountVal
+            };
+            icePayments.push(payment);
+            
+            // Also add as a shop expense (chi phí quán)
+            const tx = {
+                id: Date.now() + 1,
+                type: 'expense',
+                date: payment.date,
+                amount: amountVal,
+                name: `Thanh toán đá (${qtyVal} bao)`,
+                group: 'quan',
+                category: 'Chi phí chung',
+                subCategory: '',
+                note: `Thanh toán ${qtyVal} bao đá`,
+                paymentMethod: 'cash',
+                isCardPayment: false
+            };
+            transactions.push(tx);
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
 
-        const success = await saveCloudData('Đã thanh toán đá!');
-        if (success) {
-            document.getElementById('icePayQty').value = '';
-            document.getElementById('icePayAmount').value = '';
-            renderIceUI();
-        } else {
-            icePayments = icePayments.filter(p => p.id !== payment.id);
-            transactions = transactions.filter(t => t.id !== tx.id);
-        }
-    });
+            const success = await saveCloudData('Đã thanh toán đá!');
+            if (success) {
+                document.getElementById('icePayQty').value = '';
+                document.getElementById('icePayAmount').value = '';
+                renderIceUI();
+            } else {
+                icePayments = icePayments.filter(p => p.id !== payment.id);
+                transactions = transactions.filter(t => t.id !== tx.id);
+            }
+        });
+    }
 
-    // Delete ice payment
-    document.getElementById('icePaymentList').addEventListener('click', async (e) => {
-        const btn = e.target.closest('.ice-delete-btn');
-        if (!btn) return;
-        const id = parseInt(btn.dataset.id);
-        if (!confirm('Xoá lần thanh toán đá này?')) return;
-        const backup = [...icePayments];
-        icePayments = icePayments.filter(p => p.id !== id);
-        const success = await saveCloudData('Đã xoá thanh toán đá');
-        if (success) {
-            renderIceUI();
-        } else {
-            icePayments = backup;
-        }
-    });
+    // Delete ice payment (only if element exists)
+    const icePaymentListEl = document.getElementById('icePaymentList');
+    if (icePaymentListEl) {
+        icePaymentListEl.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.ice-delete-btn');
+            if (!btn) return;
+            const id = parseInt(btn.dataset.id);
+            if (!confirm('Xoá lần thanh toán đá này?')) return;
+            const backup = [...icePayments];
+            icePayments = icePayments.filter(p => p.id !== id);
+            const success = await saveCloudData('Đã xoá thanh toán đá');
+            if (success) {
+                renderIceUI();
+            } else {
+                icePayments = backup;
+            }
+        });
+    }
 }
 
 function renderIceUI() {
