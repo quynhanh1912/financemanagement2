@@ -79,7 +79,10 @@ const categories = {
         "Trả góp ngân hàng"
     ],
     congty: [
-        "Chi phí công ty"
+        "Chi phí chuyển phát",
+        "Chi phí vận chuyển",
+        "Chi phí sub",
+        "Chi phí nhân sự"
     ]
 };
 
@@ -108,7 +111,6 @@ const expenseForm = document.getElementById('expenseForm');
 const incomeForm = document.getElementById('incomeForm');
 const expenseCategory = document.getElementById('expenseCategory');
 const subCategoryGroup = document.getElementById('subCategoryGroup');
-const companySubCategoryGroup = document.getElementById('companySubCategoryGroup');
 
 const billsAlert = document.getElementById('billsAlert');
 const billsMessage = document.getElementById('billsMessage');
@@ -319,11 +321,10 @@ function setupFormEvents() {
         });
     });
 
-    // Show sub-category only for "Nguyên vật liệu quán" / "Chi phí công ty"
+    // Show sub-category only for "Nguyên vật liệu quán"
     // Also auto-switch to cash when "Thanh toán thẻ" is selected
     expenseCategory.addEventListener('change', () => {
         subCategoryGroup.classList.toggle('hidden', expenseCategory.value !== 'Nguyên vật liệu quán');
-        companySubCategoryGroup.classList.toggle('hidden', expenseCategory.value !== 'Chi phí công ty');
         // Thanh toán thẻ = always cash payment
         if (expenseCategory.value === 'Thanh toán thẻ Techcombank') {
             document.getElementById('payBtnCash').click();
@@ -339,8 +340,6 @@ function setupFormEvents() {
         let subCategory = '';
         if (expenseCategory.value === 'Nguyên vật liệu quán') {
             subCategory = document.getElementById('expenseSubCategory').value;
-        } else if (expenseCategory.value === 'Chi phí công ty') {
-            subCategory = document.getElementById('expenseCompanySubCategory').value;
         }
         const tx = {
             id: Date.now(),
@@ -364,7 +363,6 @@ function setupFormEvents() {
             document.getElementById('payBtnCard').classList.remove('active');
             document.getElementById('expensePayMethod').value = 'cash';
             subCategoryGroup.classList.add('hidden');
-            companySubCategoryGroup.classList.add('hidden');
         }
     });
 
@@ -642,13 +640,9 @@ function openEditModal(id) {
 
         // Show/populate sub-category fields based on category
         const editSubCategoryGroup = document.getElementById('editSubCategoryGroup');
-        const editCompanySubCategoryGroup = document.getElementById('editCompanySubCategoryGroup');
         editSubCategoryGroup.classList.toggle('hidden', tx.category !== 'Nguyên vật liệu quán');
-        editCompanySubCategoryGroup.classList.toggle('hidden', tx.category !== 'Chi phí công ty');
         if (tx.category === 'Nguyên vật liệu quán') {
             document.getElementById('editSubCategory').value = tx.subCategory || 'Ly, bao, nắp';
-        } else if (tx.category === 'Chi phí công ty') {
-            document.getElementById('editCompanySubCategory').value = tx.subCategory || 'Chi phí chuyển phát';
         }
 
         // Restore payment method toggle
@@ -678,7 +672,6 @@ function openEditModal(id) {
     document.getElementById('editCategory').onchange = () => {
         const val = document.getElementById('editCategory').value;
         document.getElementById('editSubCategoryGroup').classList.toggle('hidden', val !== 'Nguyên vật liệu quán');
-        document.getElementById('editCompanySubCategoryGroup').classList.toggle('hidden', val !== 'Chi phí công ty');
     };
 }
 
@@ -715,8 +708,6 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
         tx.paymentMethod = tx.isCardPayment ? 'cash' : (document.getElementById('editPayMethod').value || 'cash');
         if (tx.category === 'Nguyên vật liệu quán') {
             tx.subCategory = document.getElementById('editSubCategory').value;
-        } else if (tx.category === 'Chi phí công ty') {
-            tx.subCategory = document.getElementById('editCompanySubCategory').value;
         } else {
             tx.subCategory = '';
         }
@@ -770,22 +761,14 @@ function applyFilter() {
         if (tx.type !== 'expense') return false;
         const d = new Date(tx.date);
         if (d < from || d > to) return false;
-        if (catVal) {
-            // Check if filtering by sub-category (prefixed with 'sub:')
-            if (catVal.startsWith('sub:')) {
-                const subCatFilter = catVal.substring(4);
-                if (tx.category !== 'Chi phí công ty' || tx.subCategory !== subCatFilter) return false;
-            } else {
-                if (tx.category !== catVal) return false;
-            }
-        }
+        if (catVal && tx.category !== catVal) return false;
         return true;
     });
 
     const total = filtered.reduce((sum, tx) => sum + tx.amount, 0);
     const fromStr = from.toLocaleDateString('vi-VN');
     const toStr = to.toLocaleDateString('vi-VN');
-    const catLabel = catVal ? (catVal.startsWith('sub:') ? catVal.substring(4) : catVal) : 'Tất cả danh mục';
+    const catLabel = catVal || 'Tất cả danh mục';
 
     let breakdown = {};
     filtered.forEach(tx => {
@@ -1005,7 +988,7 @@ function renderPitTax() {
     let totalSalary = 0;
 
     transactions.forEach(tx => {
-        if (tx.type === 'expense' && tx.category === 'Chi phí công ty' && tx.subCategory === 'Chi phí nhân sự') {
+        if (tx.type === 'expense' && tx.category === 'Chi phí nhân sự') {
             const txDate = new Date(tx.date);
             if (txDate.getMonth() === curMonth && txDate.getFullYear() === curYear) {
                 if (tx.amount >= PIT_THRESHOLD) {
