@@ -1073,7 +1073,7 @@ function renderCafeChart(cost, revenue) {
     const label = document.getElementById('cafeChartLabel');
     
     if (revenue === 0) {
-        cafeChartInstance = createDonut(ctx, [1, 0], ['#94a3b8', '#1e293b']);
+        cafeChartInstance = createDonut(ctx, [1, 0], ['#e2e8f0', '#1e293b']);
         label.innerHTML = 'Chưa có<br>doanh thu';
         label.className = 'chart-label';
         return;
@@ -1082,17 +1082,21 @@ function renderCafeChart(cost, revenue) {
     const ratio = cost / revenue;
     const ratioPercent = Math.round(ratio * 100);
     const isDanger = ratio > 0.65;
-    const color = isDanger ? '#F0654B' : '#22B573';
+    
+    // Chi phí (Cost): Vàng, nếu nguy hiểm (vượt 65%) thì Đỏ
+    const costColor = isDanger ? '#F0654B' : '#F2A93B';
+    // Lợi nhuận (Remaining): Xanh lá
+    const remainingColor = '#22B573';
     
     let remaining = revenue - cost;
     if (remaining < 0) remaining = 0;
 
-    cafeChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    cafeChartInstance = createDonut(ctx, [cost, remaining], [costColor, remainingColor]);
     
     // Show amount AND percentage inside chart
     label.innerHTML = `
-        <span style="font-size:0.95rem; font-weight:700; display:block;">${formatMoney(cost)}</span>
-        <span style="font-size:0.8rem; opacity:0.75;">Chi phí: ${ratioPercent}%</span>
+        <span style="font-size:0.95rem; font-weight:700; display:block; color: var(--text-main);">${formatMoney(cost)}</span>
+        <span style="font-size:0.8rem; opacity:0.8; color: var(--text-muted);">Chi phí: ${ratioPercent}%</span>
         ${isDanger ? '<span style="font-size:0.72rem; color:#F0654B;">(Lợi nhuận giảm)</span>' : ''}
     `;
     label.className = isDanger ? 'chart-label danger' : 'chart-label';
@@ -1108,15 +1112,19 @@ function renderFoodChart(cost) {
     const isDanger = remaining < 0;
     if (remaining < 0) remaining = 0;
     
-    const color = isDanger ? '#F0654B' : '#F2A93B'; // Amber for food
+    // Đã xài (Cost): Vàng, vượt mức thì Đỏ
+    const costColor = isDanger ? '#F0654B' : '#F2A93B'; 
+    // Còn lại (Remaining): Xanh lá
+    const remainingColor = '#22B573';
 
-    foodChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    // Đổi mảng màu: [Cost, Remaining] => [costColor, remainingColor]
+    foodChartInstance = createDonut(ctx, [cost, remaining], [costColor, remainingColor]);
     
     if (isDanger) {
-        label.innerHTML = `Vượt mức<br>${formatMoney(cost - limit)}`;
+        label.innerHTML = `Vượt mức<br><span style="color:#F0654B">${formatMoney(cost - limit)}</span>`;
         label.className = 'chart-label danger';
     } else {
-        label.innerHTML = `Còn lại<br>${formatMoney(limit - cost)}`;
+        label.innerHTML = `Còn lại<br><span style="color:var(--text-main)">${formatMoney(limit - cost)}</span>`;
         label.className = 'chart-label';
     }
 }
@@ -1131,15 +1139,18 @@ function renderPersonalChart(cost) {
     const isDanger = remaining < 0;
     if (remaining < 0) remaining = 0;
     
-    const color = isDanger ? '#F0654B' : '#3FBF9F'; // Teal-mint for personal
+    // Đã xài (Cost): Vàng, vượt mức thì Đỏ
+    const costColor = isDanger ? '#F0654B' : '#F2A93B'; 
+    // Còn lại (Remaining): Xanh lá
+    const remainingColor = '#22B573';
 
-    personalChartInstance = createDonut(ctx, [cost, remaining], [color, 'rgba(255,255,255,0.05)']);
+    personalChartInstance = createDonut(ctx, [cost, remaining], [costColor, remainingColor]);
     
     if (isDanger) {
-        label.innerHTML = `Vượt mức<br>${formatMoney(cost - limit)}`;
+        label.innerHTML = `Vượt mức<br><span style="color:#F0654B">${formatMoney(cost - limit)}</span>`;
         label.className = 'chart-label danger';
     } else {
-        label.innerHTML = `Còn lại<br>${formatMoney(limit - cost)}`;
+        label.innerHTML = `Còn lại<br><span style="color:var(--text-main)">${formatMoney(limit - cost)}</span>`;
         label.className = 'chart-label';
     }
 }
