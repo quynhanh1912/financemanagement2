@@ -194,7 +194,7 @@ function hideGlobalLoader() {
 function setupCloudModal() {
     const cloudBtn = document.getElementById('cloudBtn');
     const cloudModal = document.getElementById('cloudModal');
-    const closeBtn = cloudModal.querySelector('.close-modal');
+    const closeBtn = document.getElementById('closeCloudModalBtn');
     const saveBtn = document.getElementById('saveCloudUrlBtn');
     const syncBtn = document.getElementById('syncNowBtn');
     const urlInput = document.getElementById('cloudApiUrl');
@@ -204,6 +204,9 @@ function setupCloudModal() {
 
     if(cloudBtn) {
         cloudBtn.onclick = () => {
+            // Refresh URL input each time modal opens
+            const url = localStorage.getItem('finance_cloud_url');
+            if (url) urlInput.value = url;
             cloudModal.classList.remove('hidden');
         };
     }
@@ -211,22 +214,40 @@ function setupCloudModal() {
     if(closeBtn) {
         closeBtn.onclick = () => cloudModal.classList.add('hidden');
     }
+    
+    // Close on overlay click
+    cloudModal.onclick = (e) => {
+        if (e.target === cloudModal) cloudModal.classList.add('hidden');
+    };
 
     if(saveBtn) {
         saveBtn.onclick = async () => {
-            localStorage.setItem('finance_cloud_url', urlInput.value.trim());
-            cloudModal.classList.add('hidden');
+            const url = urlInput.value.trim();
+            if (!url) { alert('Vui lòng nhập URL!'); return; }
+            localStorage.setItem('finance_cloud_url', url);
+            showCloudStatus('⏳ Đang kết nối và tải dữ liệu...', '#f0fdf4', '#166534');
             await syncFromCloud();
+            showCloudStatus('✅ Kết nối thành công!', '#f0fdf4', '#166534');
+            setTimeout(() => cloudModal.classList.add('hidden'), 1200);
         };
     }
     
-    // Show sync button for manual re-sync
     if(syncBtn) {
-        syncBtn.style.display = '';
         syncBtn.onclick = async () => {
+            showCloudStatus('⏳ Đang tải dữ liệu từ Cloud...', '#eef2ff', '#3730a3');
             await syncFromCloud();
+            showCloudStatus('✅ Đã đồng bộ xong!', '#f0fdf4', '#166534');
         };
     }
+}
+
+function showCloudStatus(msg, bg, color) {
+    const el = document.getElementById('cloudSyncStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = bg;
+    el.style.color = color;
 }
 
 // Background sync FROM cloud (pulls latest data, merges, updates UI)

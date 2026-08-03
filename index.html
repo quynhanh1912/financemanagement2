@@ -529,24 +529,34 @@
 
     <!-- Cloud Config Modal -->
     <div id="cloudModal" class="modal-overlay hidden">
-        <div class="modal-content glass-card">
-            <div class="modal-header">
-                <h2><i class="fas fa-cloud"></i> Đồng bộ Google Sheets</h2>
-                <button class="close-modal"><i class="fas fa-times"></i></button>
+        <div style="background: white; border-radius: 20px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="background: linear-gradient(135deg, #22B573, #1C9760); padding: 20px 24px; display: flex; align-items: center; justify-content: space-between;">
+                <h2 style="color: white; font-size: 1.1rem; font-weight: 700; margin: 0;"><i class="fas fa-cloud"></i> Đồng bộ Google Sheets</h2>
+                <button id="closeCloudModalBtn" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem;"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body">
-                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">
-                    Nhập Web App URL của Google Apps Script để đồng bộ dữ liệu.
+            <div style="padding: 24px;">
+                <p style="font-size: 0.88rem; color: #475569; margin-bottom: 16px; line-height: 1.5;">
+                    Dán Web App URL của Google Apps Script vào đây để kết nối dữ liệu với Google Sheets.
                 </p>
-                <div class="form-group">
-                    <label>API URL</label>
-                    <input type="text" id="cloudApiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">API URL</label>
+                    <input type="url" id="cloudApiUrl" 
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        style="width: 100%; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.9rem; outline: none; box-sizing: border-box;"
+                        onfocus="this.style.borderColor='#22B573'" 
+                        onblur="this.style.borderColor='#e2e8f0'">
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="saveCloudUrlBtn" class="submit-btn" style="flex: 1; background: var(--primary);">Lưu URL</button>
-                    <button id="syncNowBtn" class="submit-btn" style="flex: 1; background: #6366f1;">Tải Cloud Về Máy</button>
+                <div id="cloudSyncStatus" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 14px;"></div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="saveCloudUrlBtn" 
+                        style="flex: 1; padding: 12px; background: #22B573; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-save"></i> Lưu & Kết nối
+                    </button>
+                    <button id="syncNowBtn"
+                        style="flex: 1; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-rotate"></i> Tải Cloud Về
+                    </button>
                 </div>
-                <p id="cloudStatusMsg" style="margin-top: 15px; font-size: 0.85rem; text-align: center; display: none;"></p>
             </div>
         </div>
     </div>
