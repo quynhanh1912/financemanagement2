@@ -7,6 +7,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (isAuth) {
         document.getElementById('pinOverlay').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
+        init(); // Already authenticated - init immediately
     }
 });
 
@@ -55,6 +56,7 @@ function checkPin() {
             document.getElementById('pinOverlay').classList.add('hidden');
             document.getElementById('appContainer').classList.remove('hidden');
             document.getElementById('pinOverlay').style.opacity = '1'; // reset
+            init(); // Init AFTER appContainer is visible so all elements can be found
         }, 300);
     } else {
         document.getElementById('pinError').classList.remove('hidden');
@@ -1467,5 +1469,4 @@ function renderIceUnpaidBanner() {
     el.textContent = `${unpaid} bao`;
 }
 
-// Start
-init();
+// init() is called from checkPin() and DOMContentLoaded after authentication
