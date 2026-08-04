@@ -176,7 +176,7 @@ body {
     font-weight: 600;
 }
 
-@media (max-width: 420px) {
+@media (max-width: 480px) {
     .stat-value {
         font-size: 0.85rem;
         white-space: nowrap;
