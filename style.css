@@ -827,6 +827,11 @@ select option {
     border: 1px solid rgba(242,169,59,0.25);
 }
 
+/* Ice debt stat box */
+.ice-debt-stat {
+    border: 1px solid rgba(59,130,246,0.25);
+}
+
 /* Card debt note below header */
 .card-debt-note {
     font-size: 0.78rem;
