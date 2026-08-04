@@ -104,6 +104,13 @@
                         <span id="totalCardDebt" class="stat-value" style="color: #a78bfa;">0 đ</span>
                     </div>
                 </div>
+                <div class="stat-box ice-debt-stat">
+                    <i class="fas fa-cube" style="color: #3b82f6;"></i>
+                    <div>
+                        <span class="stat-label">Tiền đá cần trả</span>
+                        <span id="totalIceDebt" class="stat-value" style="color: #3b82f6;">0 đ</span>
+                    </div>
+                </div>
             </div>
             <!-- Advance salary note -->
             <p id="advanceNote" class="advance-note hidden">Số này sẽ tự động trừ vào lương Quán mùng 5 tháng sau.</p>
@@ -402,6 +409,21 @@
                 <button type="button" id="addIceBtn" class="small-btn">Thêm</button>
             </div>
 
+            <!-- Ice payment section -->
+            <div class="ice-payment-section">
+                <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;"><i class="fas fa-hand-holding-dollar"></i> Số bao đá đã thanh toán</h4>
+                <div class="ice-payment-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Số bao đã thanh toán</label>
+                        <input type="number" id="icePayQty" placeholder="VD: 10" min="1" inputmode="numeric" autocomplete="off">
+                    </div>
+                    <button type="button" id="icePayBtn" class="small-btn">Ghi nhận</button>
+                </div>
+                <div id="icePaymentList" class="ice-payment-list">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
             <!-- Query ice by date range -->
             <div class="ice-query-section">
                 <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;"><i class="fas fa-search"></i> Tra cứu đá theo khoảng thời gian</h4>
@@ -547,15 +569,21 @@
                         onblur="this.style.borderColor='#e2e8f0'">
                 </div>
                 <div id="cloudSyncStatus" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 14px;"></div>
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 8px; flex-direction: column;">
                     <button id="saveCloudUrlBtn" 
-                        style="flex: 1; padding: 12px; background: #22B573; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
+                        style="width: 100%; padding: 12px; background: #22B573; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
                         <i class="fas fa-save"></i> Lưu & Kết nối
                     </button>
-                    <button id="syncNowBtn"
-                        style="flex: 1; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;">
-                        <i class="fas fa-rotate"></i> Tải Cloud Về
-                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="pushToCloudBtn"
+                            style="flex: 1; padding: 12px; background: #f59e0b; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;" title="Đẩy dữ liệu từ máy này lên Cloud (Ghi đè Cloud)">
+                            <i class="fas fa-cloud-upload-alt"></i> Đẩy Lên
+                        </button>
+                        <button id="syncNowBtn"
+                            style="flex: 1; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;" title="Tải dữ liệu từ Cloud về máy này (Ghi đè máy)">
+                            <i class="fas fa-cloud-download-alt"></i> Tải Về
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
