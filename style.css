@@ -178,15 +178,17 @@ body {
 
 @media (max-width: 420px) {
     .stat-value {
-        font-size: 0.95rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        letter-spacing: -0.5px;
     }
     .stat-box {
-        padding: 10px 8px;
-        gap: 8px;
+        padding: 8px 6px;
+        gap: 6px;
     }
     .stat-box i {
-        font-size: 1.2rem;
-        padding: 8px;
+        font-size: 1.1rem;
+        padding: 6px;
     }
 }
 
