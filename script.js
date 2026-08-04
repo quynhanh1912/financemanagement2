@@ -138,6 +138,7 @@ async function init() {
     setupFormEvents();
     try { setupIceEvents(); } catch (e) { console.error('Lỗi setupIceEvents:', e); }
     try { setupCloudModal(); } catch (e) { console.error('Lỗi setupCloudModal:', e); }
+    setupModalEvents(); // Đảm bảo các event của modal chỉ chạy sau khi DOM sẵn sàng
     
     // LOCAL-FIRST: Load from localStorage instantly (no waiting)
     loadFromLocal();
