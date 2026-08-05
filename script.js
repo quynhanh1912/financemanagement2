@@ -947,6 +947,11 @@ function applyFilter() {
         </div>
         <div class="filter-count">${filtered.length} giao dịch được tìm thấy</div>
         ${detailsHTML}
+        <div style="text-align: center; margin-top: 15px;">
+            <button onclick="document.getElementById('filterResult').classList.add('hidden')" style="background: rgba(34, 181, 115, 0.1); color: var(--primary); border: none; padding: 10px 20px; border-radius: 20px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                <i class="fas fa-chevron-up"></i> Thu gọn kết quả
+            </button>
+        </div>
     `;
 }
 
