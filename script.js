@@ -907,6 +907,33 @@ function applyFilter() {
         `<div class="filter-row-item"><span>${k}</span><span class="filter-amount">${formatMoney(v)}</span></div>`
     ).join('');
 
+    let detailsHTML = '';
+    if (filtered.length > 0) {
+        detailsHTML = `<div style="margin-top: 20px; border-top: 1px dashed rgba(34, 181, 115, 0.3); padding-top: 15px;">
+            <p style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase;">Chi tiết giao dịch (Có thể ấn vào để sửa)</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">`;
+        
+        filtered.forEach(tx => {
+            detailsHTML += `
+                <div onclick="openEditModal(${tx.id})" style="background: white; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
+                    <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-arrow-down"></i>
+                        </div>
+                        <div style="overflow: hidden;">
+                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${tx.name || tx.category}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">${new Date(tx.date).toLocaleDateString('vi-VN')} • ${tx.category}</div>
+                        </div>
+                    </div>
+                    <div style="font-weight: 700; color: var(--danger); font-size: 0.9rem; white-space: nowrap; margin-left: 10px;">
+                        -${formatMoney(tx.amount)}
+                    </div>
+                </div>
+            `;
+        });
+        detailsHTML += `</div></div>`;
+    }
+
     resultEl.classList.remove('hidden');
     resultEl.innerHTML = `
         <div class="filter-header">
@@ -919,6 +946,7 @@ function applyFilter() {
             <strong>${formatMoney(total)}</strong>
         </div>
         <div class="filter-count">${filtered.length} giao dịch được tìm thấy</div>
+        ${detailsHTML}
     `;
 }
 
