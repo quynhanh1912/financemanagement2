@@ -131,6 +131,16 @@
                             <canvas id="cafeChart"></canvas>
                         </div>
                         <p id="cafeChartLabel" class="chart-label">Đang tính...</p>
+                        <div id="cafeChartDetails" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-color); border-top: 1px dashed rgba(0,0,0,0.1); padding-top: 10px; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Doanh thu:</span>
+                                <span style="font-weight: 600; color: var(--success);" id="cafeRevenueDetail">0 đ</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Chi phí:</span>
+                                <span style="font-weight: 600; color: var(--danger);" id="cafeCostDetail">0 đ</span>
+                            </div>
+                        </div>
                     </div>
                     <!-- Chart 2: Ăn uống -->
                     <div class="chart-box">

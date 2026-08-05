@@ -1242,13 +1242,17 @@ function renderCafeChart(cost, revenue) {
 
     cafeChartInstance = createDonut(ctx, [cost, remaining], [costColor, remainingColor]);
     
-    // Show amount AND percentage inside chart
     label.innerHTML = `
         <span style="font-size:0.95rem; font-weight:700; display:block; color: var(--text-main);">${formatMoney(cost)}</span>
         <span style="font-size:0.8rem; opacity:0.8; color: var(--text-muted);">Chi phí: ${ratioPercent}%</span>
         ${isDanger ? '<span style="font-size:0.72rem; color:#F0654B;">(Lợi nhuận giảm)</span>' : ''}
     `;
     label.className = isDanger ? 'chart-label danger' : 'chart-label';
+
+    const revenueEl = document.getElementById('cafeRevenueDetail');
+    const costEl = document.getElementById('cafeCostDetail');
+    if (revenueEl) revenueEl.textContent = formatMoney(revenue);
+    if (costEl) costEl.textContent = formatMoney(cost);
 }
 
 function renderFoodChart(cost) {
