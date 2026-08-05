@@ -991,27 +991,7 @@ function checkBillsAlert(currentBalance) {
     let totalNeeded = 0;
     let hasAlert = false;
 
-    // 1. Quán (Mặc định báo từ ngày 25 đến mùng 5 như cũ)
-    if (currentDay >= 25 || currentDay <= 5) {
-        hasAlert = true;
-        let advancedSalary = 0;
-        transactions.forEach(tx => {
-            if (tx.type === 'expense' && tx.category === 'Lương ứng trước') {
-                const txDate = new Date(tx.date);
-                if (txDate.getMonth() === prevMonth && txDate.getFullYear() === year) {
-                    advancedSalary += tx.amount;
-                }
-            }
-        });
-
-        const baseCafeSalary = daysInPrevMonth * STAFF_SALARY_PER_DAY;
-        const cafeSalaryNeeded = Math.max(0, baseCafeSalary - advancedSalary);
-        
-        totalNeeded += cafeSalaryNeeded;
-        dueBillsHTML += `<div style="margin-bottom: 5px;">• Lương Quán (Mùng 5): ${formatMoney(cafeSalaryNeeded)} ${advancedSalary > 0 ? `<span style="font-size:0.8rem">(đã trừ ${formatMoney(advancedSalary)} ứng)</span>` : ''}</div>`;
-    }
-
-    // 2. Các khoản đã cài đặt
+    // Các khoản đã cài đặt
     const daysInCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     scheduledBills.forEach(bill => {
         let daysLeft;
