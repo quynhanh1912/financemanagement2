@@ -1490,30 +1490,24 @@ function renderIceUnpaidBanner() {
 // init() is called from checkPin() and DOMContentLoaded after authentication
 
 window.showBreakdown = function(type) {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-
     let breakdown = {};
     let total = 0;
 
+    // All-time totals so this matches the number shown on the dashboard card
     transactions.forEach(tx => {
-        const d = new Date(tx.date);
-        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-            if (type === 'income' && tx.type === 'income') {
-                let sourceName = tx.source === 'quan' ? 'Doanh thu quán' : (tx.source === 'congty' ? 'Doanh thu công ty' : 'Doanh thu khác');
-                breakdown[sourceName] = (breakdown[sourceName] || 0) + tx.amount;
-                total += tx.amount;
-            } else if (type === 'expense' && tx.type === 'expense') {
-                let groupName = 'Khác';
-                if (tx.group === 'quan') groupName = 'Chi phí Quán';
-                else if (tx.group === 'giadinh') groupName = 'Chi phí Gia đình';
-                else if (tx.group === 'congty') groupName = 'Chi phí Công ty';
-                else if (tx.group === 'the') groupName = 'Thanh toán Thẻ';
-                
-                breakdown[groupName] = (breakdown[groupName] || 0) + tx.amount;
-                total += tx.amount;
-            }
+        if (type === 'income' && tx.type === 'income') {
+            let sourceName = tx.source === 'quan' ? 'Doanh thu quán' : (tx.source === 'congty' ? 'Doanh thu công ty' : 'Doanh thu khác');
+            breakdown[sourceName] = (breakdown[sourceName] || 0) + tx.amount;
+            total += tx.amount;
+        } else if (type === 'expense' && tx.type === 'expense') {
+            let groupName = 'Khác';
+            if (tx.group === 'quan') groupName = 'Chi phí Quán';
+            else if (tx.group === 'giadinh') groupName = 'Chi phí Gia đình';
+            else if (tx.group === 'congty') groupName = 'Chi phí Công ty';
+            else if (tx.group === 'the') groupName = 'Thanh toán Thẻ';
+
+            breakdown[groupName] = (breakdown[groupName] || 0) + tx.amount;
+            total += tx.amount;
         }
     });
 
@@ -1524,7 +1518,7 @@ window.showBreakdown = function(type) {
     titleEl.innerHTML = type === 'income' ? '<i class="fas fa-arrow-trend-up text-green"></i> Chi tiết Tổng thu' : '<i class="fas fa-arrow-trend-down text-red"></i> Chi tiết Tổng chi';
 
     let html = `<div style="margin-bottom: 15px; text-align: center;">
-                    <div style="font-size: 0.9rem; color: var(--text-muted);">Tổng cộng tháng này</div>
+                    <div style="font-size: 0.9rem; color: var(--text-muted);">Tổng cộng</div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: ${type === 'income' ? 'var(--success)' : 'var(--danger)'};">${formatMoney(total)}</div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">`;
@@ -1539,7 +1533,7 @@ window.showBreakdown = function(type) {
             html += `
                 <div style="background: white; padding: 12px 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #f1f5f9;">
                     <div style="display: flex; flex-direction: column;">
-                        <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-color);">${name}</span>
+                        <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${name}</span>
                         <span style="font-size: 0.8rem; color: var(--text-muted);">${percent}% tổng ${type === 'income' ? 'thu' : 'chi'}</span>
                     </div>
                     <span style="font-weight: 700; color: ${type === 'income' ? 'var(--success)' : 'var(--danger)'};">${formatMoney(amount)}</span>
